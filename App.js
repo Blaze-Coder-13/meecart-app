@@ -7,17 +7,26 @@ import { AuthProvider, useAuth } from './src/hooks/useAuth';
 import { CartProvider } from './src/hooks/useCart';
 import AppNavigator from './src/navigation/AppNavigator';
 
-// Keep splash visible until auth is resolved
-SplashScreen.preventAutoHideAsync();
+try {
+  SplashScreen.preventAutoHideAsync();
+} catch {}
 
 function AppContent() {
   const { loading } = useAuth();
 
   useEffect(() => {
-    if (!loading) SplashScreen.hideAsync();
-  }, [loading]);
+    // Force hide splash after 3 seconds no matter what
+    const timeout = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    }, 3000);
 
-  if (loading) return null;
+    if (!loading) {
+      clearTimeout(timeout);
+      SplashScreen.hideAsync().catch(() => {});
+    }
+
+    return () => clearTimeout(timeout);
+  }, [loading]);
 
   return (
     <>
