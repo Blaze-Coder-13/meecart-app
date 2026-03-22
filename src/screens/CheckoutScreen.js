@@ -15,7 +15,13 @@ export default function CheckoutScreen({ navigation }) {
   const { cartItems, cartTotal, clearCart } = useCart();
 
   const savedAddress = user?.address || '';
-  const [addressMode, setAddressMode] = useState(savedAddress ? 'saved' : 'new');
+  const [addressMode, setAddressMode] = useState('new');
+
+  useEffect(() => {
+    if (savedAddress) {
+      setAddressMode('saved');
+    }
+  }, [savedAddress]);
   const [newAddress, setNewAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [promoCode, setPromoCode] = useState('');
@@ -103,7 +109,7 @@ export default function CheckoutScreen({ navigation }) {
       Alert.alert(
         '🎉 Order Placed!',
         `Your order is confirmed!\nTotal: ₹${finalTotal}\n${deliveryCharges > 0 ? `Includes ₹${DELIVERY_CHARGE} delivery charge.` : '🎉 Free delivery!'}\nPay on delivery.`,
-        [{ text: 'Track Order', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'Main', params: { screen: 'Orders' } }] }) }]
+        [{ text: 'Track Order', onPress: () => navigation.navigate('Orders') }]
       );
     } catch (err) {
       Alert.alert('Order Failed', err.response?.data?.error || 'Something went wrong. Try again.');

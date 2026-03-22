@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { getProducts, getCategories } from '../api/client';
+import { getProducts, getCategories, getBanners } from '../api/client';
 import { useCart } from '../hooks/useCart';
 import { useAuth } from '../hooks/useAuth';
 import { Colors, FontSize, Spacing, Radius, Shadow } from '../utils/theme';
@@ -56,6 +56,7 @@ export default function HomeScreen({ navigation }) {
   const [activeCategoryName, setActiveCategoryName] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [banners, setBanners] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [view, setView] = useState('categories'); // 'categories' or 'products'
@@ -65,8 +66,12 @@ export default function HomeScreen({ navigation }) {
   async function loadCategories() {
     setLoading(true);
     try {
-      const res = await getCategories();
-      setCategories(res.data);
+      const [catRes, bannerRes] = await Promise.all([
+        getCategories(),
+        getBanners(),
+      ]);
+      setCategories(catRes.data);
+      setBanners(bannerRes.data || []);
     } catch {}
     setLoading(false);
   }
@@ -148,6 +153,27 @@ export default function HomeScreen({ navigation }) {
             )}
           </TouchableOpacity>
         </View>
+
+{/* Banners */}
+        {banners.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ marginBottom: Spacing.md }}
+          >
+            {banners.map(b => (
+              b.image_url ? (
+                <Image
+                  key={b.id}
+                  source={{ uri: b.image_url }}
+                  style={{ width: 280, height: 120, borderRadius: Radius.md, marginRight: Spacing.sm }}
+                  resizeMode="cover"
+                />
+              ) : null
+            ))}
+          </ScrollView>
+        )}
+
         <View style={styles.searchBar}>
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput

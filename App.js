@@ -1,32 +1,22 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import * as SplashScreen from 'expo-splash-screen';
+import { View, ActivityIndicator } from 'react-native';
 
 import { AuthProvider, useAuth } from './src/hooks/useAuth';
 import { CartProvider } from './src/hooks/useCart';
 import AppNavigator from './src/navigation/AppNavigator';
 
-try {
-  SplashScreen.preventAutoHideAsync();
-} catch {}
-
 function AppContent() {
   const { loading } = useAuth();
 
-  useEffect(() => {
-    // Force hide splash after 3 seconds no matter what
-    const timeout = setTimeout(() => {
-      SplashScreen.hideAsync().catch(() => {});
-    }, 3000);
-
-    if (!loading) {
-      clearTimeout(timeout);
-      SplashScreen.hideAsync().catch(() => {});
-    }
-
-    return () => clearTimeout(timeout);
-  }, [loading]);
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#2d6a4f', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color="#ffffff" />
+      </View>
+    );
+  }
 
   return (
     <>

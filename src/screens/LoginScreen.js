@@ -10,7 +10,6 @@ import { sendOTP, verifyOTP, signup, login, resetPassword } from '../api/client'
 import { useAuth } from '../hooks/useAuth';
 import { Colors, FontSize, Spacing, Radius } from '../utils/theme';
 
-// ── OTP INPUT ──────────────────────────────────────────
 function OtpInput({ value, onChange }) {
   const refs = useRef([]);
   const digits = value.split('');
@@ -70,13 +69,10 @@ const otp = StyleSheet.create({
   boxFilled: { borderColor: Colors.primaryLight, backgroundColor: Colors.primaryPale },
 });
 
-// ── MAIN SCREEN ────────────────────────────────────────
 export default function LoginScreen() {
   const { login: authLogin } = useAuth();
-  const [screen, setScreen] = useState('login'); 
-  // screens: login | register_phone | register_otp | register_details | forgot_phone | forgot_otp | forgot_reset
+  const [screen, setScreen] = useState('login');
 
-  // Shared state
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -85,21 +81,17 @@ export default function LoginScreen() {
   const [otpCode, setOtpCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  // Register details
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
 
   function resetState() {
     setPhone(''); setPassword(''); setConfirmPassword('');
     setOtpCode(''); setName(''); setAddress('');
-    setReferralCode(''); setError('');
-    setShowPassword(false); setShowConfirm(false);
+    setError(''); setShowPassword(false); setShowConfirm(false);
   }
 
   function goTo(s) { setError(''); setOtpCode(''); setScreen(s); }
 
-  // ── LOGIN ──
   async function handleLogin() {
     setError('');
     if (!/^\d{10}$/.test(phone)) { setError('Enter a valid 10-digit mobile number'); return; }
@@ -115,7 +107,6 @@ export default function LoginScreen() {
     } finally { setLoading(false); }
   }
 
-  // ── REGISTER: SEND OTP ──
   async function handleRegisterSendOTP() {
     setError('');
     if (!/^\d{10}$/.test(phone)) { setError('Enter a valid 10-digit mobile number'); return; }
@@ -129,7 +120,6 @@ export default function LoginScreen() {
     } finally { setLoading(false); }
   }
 
-  // ── REGISTER: VERIFY OTP ──
   async function handleRegisterVerifyOTP() {
     setError('');
     if (otpCode.length !== 6) { setError('Enter the 6-digit OTP'); return; }
@@ -143,7 +133,6 @@ export default function LoginScreen() {
     } finally { setLoading(false); }
   }
 
-  // ── REGISTER: CREATE ACCOUNT ──
   async function handleSignup() {
     setError('');
     if (!name.trim()) { setError('Enter your full name'); return; }
@@ -160,7 +149,6 @@ export default function LoginScreen() {
     } finally { setLoading(false); }
   }
 
-  // ── FORGOT: SEND OTP ──
   async function handleForgotSendOTP() {
     setError('');
     if (!/^\d{10}$/.test(phone)) { setError('Enter a valid 10-digit mobile number'); return; }
@@ -174,7 +162,6 @@ export default function LoginScreen() {
     } finally { setLoading(false); }
   }
 
-  // ── FORGOT: VERIFY OTP ──
   async function handleForgotVerifyOTP() {
     setError('');
     if (otpCode.length !== 6) { setError('Enter the 6-digit OTP'); return; }
@@ -188,7 +175,6 @@ export default function LoginScreen() {
     } finally { setLoading(false); }
   }
 
-  // ── FORGOT: RESET PASSWORD ──
   async function handleResetPassword() {
     setError('');
     if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
@@ -205,12 +191,15 @@ export default function LoginScreen() {
     } finally { setLoading(false); }
   }
 
-  // ── RENDER ──
   return (
     <SafeAreaView style={s.safe}>
-      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-
+      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+        <ScrollView 
+          contentContainerStyle={s.scroll} 
+          keyboardShouldPersistTaps="handled" 
+          showsVerticalScrollIndicator={false}
+          keyboardDismissMode="on-drag"
+        >
           {/* Logo */}
           <View style={s.logoWrap}>
             <View style={s.logoBox}>
@@ -220,7 +209,7 @@ export default function LoginScreen() {
             <Text style={s.logoSub}>Fresh vegetables, daily delivery</Text>
           </View>
 
-          {/* ── LOGIN ── */}
+          {/* LOGIN */}
           {screen === 'login' && (
             <View style={s.card}>
               <Text style={s.cardTitle}>Login</Text>
@@ -251,23 +240,37 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity style={s.forgotBtn} onPress={() => { resetState(); goTo('forgot_phone'); }}>
+              <TouchableOpacity
+                onPress={() => { resetState(); goTo('forgot_phone'); }}
+                style={s.forgotBtn}
+              >
                 <Text style={s.forgotText}>Forgot Password?</Text>
               </TouchableOpacity>
 
               {error ? <Text style={s.error}>{error}</Text> : null}
 
-              <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleLogin} disabled={loading} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={[s.btn, loading && s.btnDisabled]}
+                onPress={handleLogin}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Login</Text>}
               </TouchableOpacity>
 
-              <TouchableOpacity style={s.switchWrap} onPress={() => { resetState(); goTo('register_phone'); }}>
-                <Text style={s.switchText}>Don't have account? <Text style={s.switchLink}>Register here</Text></Text>
+              <TouchableOpacity
+                style={s.switchWrap}
+                onPress={() => { resetState(); goTo('register_phone'); }}
+                activeOpacity={0.7}
+              >
+                <Text style={s.switchText}>
+                  Don't have account? <Text style={s.switchLink}>Register here</Text>
+                </Text>
               </TouchableOpacity>
             </View>
           )}
 
-          {/* ── REGISTER: PHONE ── */}
+          {/* REGISTER PHONE */}
           {screen === 'register_phone' && (
             <View style={s.card}>
               <TouchableOpacity onPress={() => { resetState(); goTo('login'); }} style={s.backRow}>
@@ -290,13 +293,18 @@ export default function LoginScreen() {
 
               {error ? <Text style={s.error}>{error}</Text> : null}
 
-              <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleRegisterSendOTP} disabled={loading} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={[s.btn, loading && s.btnDisabled]}
+                onPress={handleRegisterSendOTP}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Send OTP</Text>}
               </TouchableOpacity>
             </View>
           )}
 
-          {/* ── REGISTER: OTP ── */}
+          {/* REGISTER OTP */}
           {screen === 'register_otp' && (
             <View style={s.card}>
               <TouchableOpacity onPress={() => goTo('register_phone')} style={s.backRow}>
@@ -311,7 +319,12 @@ export default function LoginScreen() {
 
               {error ? <Text style={s.error}>{error}</Text> : null}
 
-              <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleRegisterVerifyOTP} disabled={loading} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={[s.btn, loading && s.btnDisabled]}
+                onPress={handleRegisterVerifyOTP}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Verify OTP</Text>}
               </TouchableOpacity>
 
@@ -321,7 +334,7 @@ export default function LoginScreen() {
             </View>
           )}
 
-          {/* ── REGISTER: DETAILS ── */}
+          {/* REGISTER DETAILS */}
           {screen === 'register_details' && (
             <View style={[s.card, { marginBottom: 40 }]}>
               <Text style={s.cardTitle}>Complete Profile</Text>
@@ -376,16 +389,20 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               </View>
 
-
               {error ? <Text style={s.error}>{error}</Text> : null}
 
-              <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleSignup} disabled={loading} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={[s.btn, loading && s.btnDisabled]}
+                onPress={handleSignup}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Create Account</Text>}
               </TouchableOpacity>
             </View>
           )}
 
-          {/* ── FORGOT: PHONE ── */}
+          {/* FORGOT PHONE */}
           {screen === 'forgot_phone' && (
             <View style={s.card}>
               <TouchableOpacity onPress={() => { resetState(); goTo('login'); }} style={s.backRow}>
@@ -408,13 +425,18 @@ export default function LoginScreen() {
 
               {error ? <Text style={s.error}>{error}</Text> : null}
 
-              <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleForgotSendOTP} disabled={loading} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={[s.btn, loading && s.btnDisabled]}
+                onPress={handleForgotSendOTP}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Send OTP</Text>}
               </TouchableOpacity>
             </View>
           )}
 
-          {/* ── FORGOT: OTP ── */}
+          {/* FORGOT OTP */}
           {screen === 'forgot_otp' && (
             <View style={s.card}>
               <TouchableOpacity onPress={() => goTo('forgot_phone')} style={s.backRow}>
@@ -429,13 +451,18 @@ export default function LoginScreen() {
 
               {error ? <Text style={s.error}>{error}</Text> : null}
 
-              <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleForgotVerifyOTP} disabled={loading} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={[s.btn, loading && s.btnDisabled]}
+                onPress={handleForgotVerifyOTP}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Verify OTP</Text>}
               </TouchableOpacity>
             </View>
           )}
 
-          {/* ── FORGOT: RESET ── */}
+          {/* FORGOT RESET */}
           {screen === 'forgot_reset' && (
             <View style={s.card}>
               <Text style={s.cardTitle}>Reset Password</Text>
@@ -471,7 +498,12 @@ export default function LoginScreen() {
 
               {error ? <Text style={s.error}>{error}</Text> : null}
 
-              <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleResetPassword} disabled={loading} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={[s.btn, loading && s.btnDisabled]}
+                onPress={handleResetPassword}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Reset Password</Text>}
               </TouchableOpacity>
             </View>
@@ -522,7 +554,7 @@ const s = StyleSheet.create({
   eyeBtn: { position: 'absolute', right: 4, top: 12 },
   eyeIcon: { fontSize: 18 },
 
-  forgotBtn: { alignSelf: 'flex-end', marginBottom: Spacing.lg },
+  forgotBtn: { alignSelf: 'flex-end', marginBottom: Spacing.lg, padding: 4 },
   forgotText: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600' },
 
   error: { color: Colors.error, fontSize: FontSize.sm, marginBottom: Spacing.md },
@@ -535,11 +567,11 @@ const s = StyleSheet.create({
   btnDisabled: { backgroundColor: '#a0b5ac' },
   btnText: { color: Colors.white, fontSize: FontSize.md, fontWeight: '700' },
 
-  switchWrap: { alignItems: 'center', marginTop: Spacing.xl },
+  switchWrap: { alignItems: 'center', marginTop: Spacing.xl, padding: 8 },
   switchText: { fontSize: FontSize.sm, color: Colors.textMuted },
   switchLink: { color: Colors.primary, fontWeight: '700' },
 
-  backRow: { marginBottom: Spacing.md },
+  backRow: { marginBottom: Spacing.md, padding: 4 },
   backText: { color: Colors.textMuted, fontSize: FontSize.sm },
 
   sentBadge: {
@@ -549,6 +581,6 @@ const s = StyleSheet.create({
   },
   sentText: { color: Colors.primary, fontSize: FontSize.sm, fontWeight: '600' },
 
-  resendWrap: { alignItems: 'center', marginTop: Spacing.lg },
+  resendWrap: { alignItems: 'center', marginTop: Spacing.lg, padding: 8 },
   resendText: { fontSize: FontSize.sm, color: Colors.textMuted },
 });
