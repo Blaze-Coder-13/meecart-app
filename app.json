@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Meecart",
+    "slug": "meecart",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+  "adaptiveIcon": {
+    "backgroundColor": "#E6F4FE",
+    "foregroundImage": "./assets/android-icon-foreground.png",
+    "backgroundImage": "./assets/android-icon-background.png",
+    "monochromeImage": "./assets/android-icon-monochrome.png"
+  },
+  "package": "com.meecart",
+  "usesCleartextTraffic": true,
+  "minSdkVersion": 29,
+  "targetSdkVersion": 34,
+  "compileSdkVersion": 34
+},
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "782f0d27-1d51-49e2-a91c-e9cb83b30434"
+      }
+    }
+  }
+}
