@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
+  ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { placeOrder, getSettings } from '../api/client';
+import { placeOrder, getSettings, applyPromoCode, getMe, getReferralStats, getMyOrders } from '../api/client';
+import { CommonActions } from '@react-navigation/native';
 import { useCart } from '../hooks/useCart';
 import { useAuth } from '../hooks/useAuth';
 import { Colors, FontSize, Spacing, Radius, Shadow } from '../utils/theme';
@@ -14,22 +15,14 @@ export default function CheckoutScreen({ navigation }) {
   const { user } = useAuth();
   const { cartItems, cartTotal, clearCart } = useCart();
 
-  const savedAddress = user?.address || '';
-  const [addressMode, setAddressMode] = useState('new');
-
-  useEffect(() => {
-    if (savedAddress) {
-      setAddressMode('saved');
-    }
-  }, [savedAddress]);
+  const [savedAddress, setSavedAddress] = useState(user?.address || '');
+  const [addressMode, setAddressMode] = useState(user?.address ? 'saved' : 'new');
   const [newAddress, setNewAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState(null);
   const [promoLoading, setPromoLoading] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  // Settings from backend
   const [settings, setSettings] = useState({
     free_delivery_above: 150,
     delivery_charges: 30,
@@ -38,7 +31,26 @@ export default function CheckoutScreen({ navigation }) {
 
   useEffect(() => {
     loadSettings();
+    loadUserAddress();
+    loadReferralDiscount();
   }, []);
+
+  async function loadUserAddress() {
+    try {
+      const { data } = await getMe();
+      if (data.address) {
+        setSavedAddress(data.address);
+        setAddressMode('saved');
+        // Also update stored user
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const storedUser = await AsyncStorage.getItem('meecart_user');
+        if (storedUser) {
+          const parsed = JSON.parse(storedUser);
+          await AsyncStorage.setItem('meecart_user', JSON.stringify({ ...parsed, address: data.address }));
+        }
+      }
+    } catch {}
+  }
 
   async function loadSettings() {
     try {
@@ -51,25 +63,36 @@ export default function CheckoutScreen({ navigation }) {
     } catch {}
   }
 
+  async function loadReferralDiscount() {
+    try {
+      const { data } = await getReferralStats();
+      // Only apply referral discount if this is user's first order
+      const ordersRes = await getMyOrders();
+      if (ordersRes.data.length === 0 && data.referred_by) {
+        setReferralDiscount(data.discount_per_referral || 0);
+      }
+    } catch {}
+  }
+
   const FREE_DELIVERY_ABOVE = settings.free_delivery_above;
   const DELIVERY_CHARGE = settings.delivery_charges;
-
-  const discount = promoApplied ? promoApplied.discount : 0;
+  const [referralDiscount, setReferralDiscount] = useState(0);
+  const discount = (promoApplied ? promoApplied.discount : 0) + referralDiscount;
   const deliveryCharges = cartTotal >= FREE_DELIVERY_ABOVE ? 0 : DELIVERY_CHARGE;
   const finalTotal = cartTotal + deliveryCharges - discount;
-
   const selectedAddress = addressMode === 'saved' ? savedAddress : newAddress;
 
   async function applyPromo() {
     if (!promoCode.trim()) return;
     setPromoLoading(true);
     try {
-      const { data } = await applyPromoCode(promoCode.trim());
+      const { data } = await applyPromoCode(promoCode.trim(), cartTotal);
       setPromoApplied(data);
       Alert.alert('✅ Promo Applied!', `Discount of ₹${data.discount} applied!`);
     } catch (err) {
-      Alert.alert('Invalid Code', err.response?.data?.error || 'Promo code not found.');
+      Alert.alert('Invalid Code', err.response?.data?.error || 'This promo code does not exist. Please check and try again.');
       setPromoApplied(null);
+      setPromoCode('');
     } finally {
       setPromoLoading(false);
     }
@@ -85,7 +108,7 @@ export default function CheckoutScreen({ navigation }) {
       const needed = settings.min_order_value - cartTotal;
       Alert.alert(
         'Low Order Value',
-        `Minimum order is ₹${settings.min_order_value}. Add ₹${needed} more for free delivery, or continue with ₹${DELIVERY_CHARGE} delivery charge.`,
+        `Minimum order is ₹${settings.min_order_value}. Add ₹${needed} more or continue with ₹${DELIVERY_CHARGE} delivery charge.`,
         [
           { text: 'Add More Items', style: 'cancel', onPress: () => navigation.goBack() },
           { text: 'Continue', onPress: confirmOrder },
@@ -101,7 +124,7 @@ export default function CheckoutScreen({ navigation }) {
     setLoading(true);
     try {
       const items = cartItems.map(i => ({ product_id: i.product_id, quantity: i.qty }));
-      await placeOrder(items, selectedAddress.trim(), notes.trim() || undefined);
+      await placeOrder(items, selectedAddress.trim(), notes.trim() || undefined, promoApplied?.code);
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       clearCart();
@@ -109,7 +132,14 @@ export default function CheckoutScreen({ navigation }) {
       Alert.alert(
         '🎉 Order Placed!',
         `Your order is confirmed!\nTotal: ₹${finalTotal}\n${deliveryCharges > 0 ? `Includes ₹${DELIVERY_CHARGE} delivery charge.` : '🎉 Free delivery!'}\nPay on delivery.`,
-        [{ text: 'Track Order', onPress: () => navigation.navigate('Orders') }]
+        [{ text: 'View Orders', onPress: () => {
+          navigation.dispatch(
+            require('@react-navigation/native').CommonActions.reset({
+              index: 0,
+              routes: [{ name: 'Main', state: { index: 2, routes: [{ name: 'Home' }, { name: 'Cart' }, { name: 'Orders' }] } }],
+            })
+          );
+        }}]
       );
     } catch (err) {
       Alert.alert('Order Failed', err.response?.data?.error || 'Something went wrong. Try again.');
@@ -124,7 +154,6 @@ export default function CheckoutScreen({ navigation }) {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -152,8 +181,11 @@ export default function CheckoutScreen({ navigation }) {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Your Order ({cartItems.length} items)</Text>
             {cartItems.map(i => (
-              <View key={i.product_id} style={styles.orderRow}>
-                <Text style={styles.orderEmoji}>{i.emoji}</Text>
+              <View key={i.is_flash_deal ? `flash_${i.product_id}` : String(i.product_id)} style={styles.orderRow}>
+                {i.image_url
+                  ? <Image source={{ uri: i.image_url }} style={styles.orderImage} />
+                  : <Text style={styles.orderEmoji}>{i.emoji}</Text>
+                }
                 <Text style={styles.orderName}>{i.name} × {i.qty}</Text>
                 <Text style={styles.orderPrice}>₹{i.qty * i.price}</Text>
               </View>
@@ -163,10 +195,16 @@ export default function CheckoutScreen({ navigation }) {
               <Text style={styles.summaryLabel}>Subtotal</Text>
               <Text style={styles.summaryVal}>₹{cartTotal}</Text>
             </View>
-            {discount > 0 && (
+            {referralDiscount > 0 && (
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Promo Discount</Text>
-                <Text style={[styles.summaryVal, { color: Colors.success }]}>- ₹{discount}</Text>
+                <Text style={styles.summaryLabel}>🎁 Referral Discount</Text>
+                <Text style={[styles.summaryVal, { color: 'green' }]}>- ₹{referralDiscount}</Text>
+              </View>
+            )}
+            {promoApplied && promoApplied.discount > 0 && (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>🏷️ Promo Discount</Text>
+                <Text style={[styles.summaryVal, { color: 'green' }]}>- ₹{promoApplied.discount}</Text>
               </View>
             )}
             <View style={styles.summaryRow}>
@@ -230,7 +268,6 @@ export default function CheckoutScreen({ navigation }) {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Delivery Address</Text>
 
-            {/* Saved address option — only show if user has address */}
             {savedAddress ? (
               <TouchableOpacity
                 style={[styles.addressOption, addressMode === 'saved' && styles.addressOptionActive]}
@@ -249,7 +286,6 @@ export default function CheckoutScreen({ navigation }) {
               </TouchableOpacity>
             ) : null}
 
-            {/* New address option */}
             <TouchableOpacity
               style={[styles.addressOption, addressMode === 'new' && styles.addressOptionActive]}
               onPress={() => setAddressMode('new')}
@@ -325,9 +361,7 @@ const styles = StyleSheet.create({
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
   backIcon: { fontSize: 22, color: Colors.text },
   headerTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
-
   scroll: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: 20 },
-
   codCard: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
     backgroundColor: Colors.primaryPale, borderRadius: Radius.md, padding: Spacing.lg,
@@ -335,31 +369,26 @@ const styles = StyleSheet.create({
   codEmoji: { fontSize: 32 },
   codTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.primary },
   codSub: { fontSize: FontSize.xs, color: Colors.primaryLight, marginTop: 2 },
-
   section: {
     backgroundColor: Colors.white, borderRadius: Radius.lg,
     padding: Spacing.lg, ...Shadow.sm,
   },
   sectionTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text, marginBottom: Spacing.md },
-
   orderRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm },
   orderEmoji: { fontSize: 18 },
   orderName: { flex: 1, fontSize: FontSize.sm, color: Colors.text },
   orderPrice: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
-
+  orderImage: { width: 32, height: 32, borderRadius: 6 },
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.sm },
-
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing.xs },
   summaryLabel: { fontSize: FontSize.sm, color: Colors.textMuted },
   summaryVal: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
   freeText: { color: Colors.primary, fontWeight: '700' },
-
   freeDeliveryBanner: {
     backgroundColor: Colors.primaryPale, borderRadius: Radius.sm,
     padding: Spacing.sm, marginVertical: Spacing.sm,
   },
   freeDeliveryText: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: '600', textAlign: 'center' },
-
   totalRow: {
     flexDirection: 'row', justifyContent: 'space-between',
     borderTopWidth: 1, borderTopColor: Colors.border,
@@ -367,13 +396,11 @@ const styles = StyleSheet.create({
   },
   totalLabel: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
   totalAmt: { fontSize: FontSize.lg, fontWeight: '800', color: Colors.primary },
-
   promoRow: { flexDirection: 'row', gap: Spacing.sm },
   promoInput: {
     flex: 1, borderWidth: 1.5, borderColor: Colors.border,
     borderRadius: Radius.md, padding: Spacing.md,
-    fontSize: FontSize.sm, color: Colors.text,
-    letterSpacing: 2,
+    fontSize: FontSize.sm, color: Colors.text, letterSpacing: 2,
   },
   promoBtn: {
     backgroundColor: Colors.primary, borderRadius: Radius.md,
@@ -381,7 +408,6 @@ const styles = StyleSheet.create({
   },
   promoBtnText: { color: Colors.white, fontSize: FontSize.sm, fontWeight: '700' },
   promoSuccess: { color: Colors.primary, fontSize: FontSize.xs, fontWeight: '600', marginTop: Spacing.sm },
-
   addressOption: {
     borderWidth: 1.5, borderColor: Colors.border,
     borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.sm,
@@ -397,7 +423,6 @@ const styles = StyleSheet.create({
   radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.primary },
   addressOptionLabel: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
   addressOptionText: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
-
   addressInput: {
     borderWidth: 1.5, borderColor: Colors.border, borderRadius: Radius.md,
     padding: Spacing.md, fontSize: FontSize.sm, color: Colors.text,
@@ -407,7 +432,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: Colors.border, borderRadius: Radius.md,
     padding: Spacing.md, fontSize: FontSize.sm, color: Colors.text,
   },
-
   footer: {
     backgroundColor: Colors.white, padding: Spacing.lg,
     borderTopWidth: 1, borderTopColor: Colors.border, ...Shadow.md,

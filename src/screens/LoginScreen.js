@@ -1,14 +1,45 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ScrollView,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { sendOTP, verifyOTP, signup, login, resetPassword } from '../api/client';
+import { sendOTP, verifyOTP, signup, login, resetPassword, getSettings } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
 import { Colors, FontSize, Spacing, Radius } from '../utils/theme';
+
+function AppLogo({ size = 60 }) {
+  const [logo, setLogo] = useState('');
+  const [name, setName] = useState('Meecart');
+
+  useEffect(() => {
+    getSettings().then(({ data }) => {
+      if (data.app_logo_url) setLogo(data.app_logo_url);
+      if (data.app_name) setName(data.app_name);
+    }).catch(() => {});
+  }, []);
+
+  if (logo) {
+    return (
+      <Image
+        source={{ uri: logo }}
+        style={{ width: size, height: size, borderRadius: size * 0.2, marginBottom: 8 }}
+        resizeMode="contain"
+      />
+    );
+  }
+  return (
+    <View style={{
+      width: size, height: size, borderRadius: size * 0.2,
+      backgroundColor: Colors.primary,
+      alignItems: 'center', justifyContent: 'center', marginBottom: 8,
+    }}>
+      <Text style={{ fontSize: size * 0.45 }}>🛒</Text>
+    </View>
+  );
+}
 
 function OtpInput({ value, onChange }) {
   const refs = useRef([]);
@@ -17,7 +48,6 @@ function OtpInput({ value, onChange }) {
   function handleChange(text, index) {
     const digit = text.replace(/\D/g, '').slice(-1);
     const newDigits = [...digits];
-
     if (text.length > 1) {
       const pasted = text.replace(/\D/g, '').slice(0, 6).split('');
       const filled = [...Array(6)].map((_, i) => pasted[i] || '');
@@ -25,7 +55,6 @@ function OtpInput({ value, onChange }) {
       refs.current[Math.min(pasted.length - 1, 5)]?.focus();
       return;
     }
-
     newDigits[index] = digit;
     onChange(newDigits.join(''));
     if (digit && index < 5) refs.current[index + 1]?.focus();
@@ -72,7 +101,6 @@ const otp = StyleSheet.create({
 export default function LoginScreen() {
   const { login: authLogin } = useAuth();
   const [screen, setScreen] = useState('login');
-
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -83,10 +111,18 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
+  const [referralCode, setReferralCode] = useState('');
+  const [appName, setAppName] = useState('Meecart');
+
+  useEffect(() => {
+    getSettings().then(({ data }) => {
+      if (data.app_name) setAppName(data.app_name);
+    }).catch(() => {});
+  }, []);
 
   function resetState() {
     setPhone(''); setPassword(''); setConfirmPassword('');
-    setOtpCode(''); setName(''); setAddress('');
+    setOtpCode(''); setName(''); setAddress(''); setReferralCode('');
     setError(''); setShowPassword(false); setShowConfirm(false);
   }
 
@@ -141,8 +177,8 @@ export default function LoginScreen() {
     if (password !== confirmPassword) { setError('Passwords do not match'); return; }
     setLoading(true);
     try {
-      const { data } = await signup(phone, name, address, password);
-      await authLogin(data.token, data.user);
+      const { data } = await signup(phone, name, address, password, referralCode || undefined);
+      await authLogin(data.token, { ...data.user, address: address.trim() });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
       setError(err.response?.data?.error || 'Signup failed. Try again.');
@@ -194,18 +230,16 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={s.safe}>
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
-        <ScrollView 
-          contentContainerStyle={s.scroll} 
-          keyboardShouldPersistTaps="handled" 
+        <ScrollView
+          contentContainerStyle={s.scroll}
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           keyboardDismissMode="on-drag"
         >
           {/* Logo */}
           <View style={s.logoWrap}>
-            <View style={s.logoBox}>
-              <Text style={s.logoEmoji}>🛒</Text>
-            </View>
-            <Text style={s.logoName}>Meecart</Text>
+            <AppLogo size={80} />
+            <Text style={s.logoName}>{appName}</Text>
             <Text style={s.logoSub}>Fresh vegetables, daily delivery</Text>
           </View>
 
@@ -213,7 +247,6 @@ export default function LoginScreen() {
           {screen === 'login' && (
             <View style={s.card}>
               <Text style={s.cardTitle}>Login</Text>
-
               <View style={s.fieldWrap}>
                 <TextInput
                   style={s.input}
@@ -225,7 +258,6 @@ export default function LoginScreen() {
                   maxLength={10}
                 />
               </View>
-
               <View style={s.fieldWrap}>
                 <TextInput
                   style={[s.input, s.inputPr]}
@@ -239,33 +271,15 @@ export default function LoginScreen() {
                   <Text style={s.eyeIcon}>{showPassword ? '🙈' : '👁️'}</Text>
                 </TouchableOpacity>
               </View>
-
-              <TouchableOpacity
-                onPress={() => { resetState(); goTo('forgot_phone'); }}
-                style={s.forgotBtn}
-              >
+              <TouchableOpacity onPress={() => { resetState(); goTo('forgot_phone'); }} style={s.forgotBtn}>
                 <Text style={s.forgotText}>Forgot Password?</Text>
               </TouchableOpacity>
-
               {error ? <Text style={s.error}>{error}</Text> : null}
-
-              <TouchableOpacity
-                style={[s.btn, loading && s.btnDisabled]}
-                onPress={handleLogin}
-                disabled={loading}
-                activeOpacity={0.85}
-              >
+              <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleLogin} disabled={loading} activeOpacity={0.85}>
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Login</Text>}
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={s.switchWrap}
-                onPress={() => { resetState(); goTo('register_phone'); }}
-                activeOpacity={0.7}
-              >
-                <Text style={s.switchText}>
-                  Don't have account? <Text style={s.switchLink}>Register here</Text>
-                </Text>
+              <TouchableOpacity style={s.switchWrap} onPress={() => { resetState(); goTo('register_phone'); }} activeOpacity={0.7}>
+                <Text style={s.switchText}>Don't have account? <Text style={s.switchLink}>Register here</Text></Text>
               </TouchableOpacity>
             </View>
           )}
@@ -278,7 +292,6 @@ export default function LoginScreen() {
               </TouchableOpacity>
               <Text style={s.cardTitle}>Create Account</Text>
               <Text style={s.cardSub}>Enter your mobile number to get started</Text>
-
               <View style={s.fieldWrap}>
                 <TextInput
                   style={s.input}
@@ -290,15 +303,8 @@ export default function LoginScreen() {
                   maxLength={10}
                 />
               </View>
-
               {error ? <Text style={s.error}>{error}</Text> : null}
-
-              <TouchableOpacity
-                style={[s.btn, loading && s.btnDisabled]}
-                onPress={handleRegisterSendOTP}
-                disabled={loading}
-                activeOpacity={0.85}
-              >
+              <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleRegisterSendOTP} disabled={loading} activeOpacity={0.85}>
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Send OTP</Text>}
               </TouchableOpacity>
             </View>
@@ -314,20 +320,11 @@ export default function LoginScreen() {
               <View style={s.sentBadge}>
                 <Text style={s.sentText}>OTP sent to +91 {phone}</Text>
               </View>
-
               <OtpInput value={otpCode} onChange={setOtpCode} />
-
               {error ? <Text style={s.error}>{error}</Text> : null}
-
-              <TouchableOpacity
-                style={[s.btn, loading && s.btnDisabled]}
-                onPress={handleRegisterVerifyOTP}
-                disabled={loading}
-                activeOpacity={0.85}
-              >
+              <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleRegisterVerifyOTP} disabled={loading} activeOpacity={0.85}>
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Verify OTP</Text>}
               </TouchableOpacity>
-
               <TouchableOpacity style={s.resendWrap} onPress={handleRegisterSendOTP} disabled={loading}>
                 <Text style={s.resendText}>Didn't receive? <Text style={s.switchLink}>Resend OTP</Text></Text>
               </TouchableOpacity>
@@ -339,64 +336,55 @@ export default function LoginScreen() {
             <View style={[s.card, { marginBottom: 40 }]}>
               <Text style={s.cardTitle}>Complete Profile</Text>
               <Text style={s.cardSub}>+91 {phone}</Text>
-
               <View style={s.fieldWrap}>
-                <TextInput
-                  style={s.input}
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="Full Name"
-                  placeholderTextColor={Colors.textMuted}
-                />
+                <TextInput style={s.input} value={name} onChangeText={setName} placeholder="Full Name" placeholderTextColor={Colors.textMuted} />
               </View>
-
               <View style={s.fieldWrap}>
                 <TextInput
                   style={[s.input, { minHeight: 80, textAlignVertical: 'top' }]}
-                  value={address}
-                  onChangeText={setAddress}
+                  value={address} onChangeText={setAddress}
                   placeholder="Delivery Address (House no., Street, Area, City)"
-                  placeholderTextColor={Colors.textMuted}
-                  multiline
+                  placeholderTextColor={Colors.textMuted} multiline
                 />
               </View>
-
               <View style={s.fieldWrap}>
                 <TextInput
-                  style={[s.input, s.inputPr]}
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Create Password (min 6 characters)"
+                  style={s.input} value={referralCode}
+                  onChangeText={setReferralCode}
+                  placeholder="Referral Code (optional)"
                   placeholderTextColor={Colors.textMuted}
-                  secureTextEntry={!showPassword}
+                  autoCapitalize="characters"
+                />
+                {referralCode.length > 0 && (
+                  <View style={{ backgroundColor: '#d8f3dc', borderRadius: 8, padding: 10, marginTop: 6 }}>
+                    <Text style={{ color: '#2d6a4f', fontSize: 12, fontWeight: '600' }}>
+                      🎉 Valid referral code = ₹30 off your first order!
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <View style={s.fieldWrap}>
+                <TextInput
+                  style={[s.input, s.inputPr]} value={password} onChangeText={setPassword}
+                  placeholder="Create Password (min 6 characters)"
+                  placeholderTextColor={Colors.textMuted} secureTextEntry={!showPassword}
                 />
                 <TouchableOpacity style={s.eyeBtn} onPress={() => setShowPassword(!showPassword)}>
                   <Text style={s.eyeIcon}>{showPassword ? '🙈' : '👁️'}</Text>
                 </TouchableOpacity>
               </View>
-
               <View style={s.fieldWrap}>
                 <TextInput
-                  style={[s.input, s.inputPr]}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
+                  style={[s.input, s.inputPr]} value={confirmPassword} onChangeText={setConfirmPassword}
                   placeholder="Confirm Password"
-                  placeholderTextColor={Colors.textMuted}
-                  secureTextEntry={!showConfirm}
+                  placeholderTextColor={Colors.textMuted} secureTextEntry={!showConfirm}
                 />
                 <TouchableOpacity style={s.eyeBtn} onPress={() => setShowConfirm(!showConfirm)}>
                   <Text style={s.eyeIcon}>{showConfirm ? '🙈' : '👁️'}</Text>
                 </TouchableOpacity>
               </View>
-
               {error ? <Text style={s.error}>{error}</Text> : null}
-
-              <TouchableOpacity
-                style={[s.btn, loading && s.btnDisabled]}
-                onPress={handleSignup}
-                disabled={loading}
-                activeOpacity={0.85}
-              >
+              <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleSignup} disabled={loading} activeOpacity={0.85}>
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Create Account</Text>}
               </TouchableOpacity>
             </View>
@@ -410,27 +398,15 @@ export default function LoginScreen() {
               </TouchableOpacity>
               <Text style={s.cardTitle}>Forgot Password</Text>
               <Text style={s.cardSub}>Enter your registered mobile number</Text>
-
               <View style={s.fieldWrap}>
                 <TextInput
-                  style={s.input}
-                  value={phone}
-                  onChangeText={setPhone}
-                  placeholder="Mobile Number"
-                  placeholderTextColor={Colors.textMuted}
-                  keyboardType="phone-pad"
-                  maxLength={10}
+                  style={s.input} value={phone} onChangeText={setPhone}
+                  placeholder="Mobile Number" placeholderTextColor={Colors.textMuted}
+                  keyboardType="phone-pad" maxLength={10}
                 />
               </View>
-
               {error ? <Text style={s.error}>{error}</Text> : null}
-
-              <TouchableOpacity
-                style={[s.btn, loading && s.btnDisabled]}
-                onPress={handleForgotSendOTP}
-                disabled={loading}
-                activeOpacity={0.85}
-              >
+              <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleForgotSendOTP} disabled={loading} activeOpacity={0.85}>
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Send OTP</Text>}
               </TouchableOpacity>
             </View>
@@ -446,17 +422,9 @@ export default function LoginScreen() {
               <View style={s.sentBadge}>
                 <Text style={s.sentText}>OTP sent to +91 {phone}</Text>
               </View>
-
               <OtpInput value={otpCode} onChange={setOtpCode} />
-
               {error ? <Text style={s.error}>{error}</Text> : null}
-
-              <TouchableOpacity
-                style={[s.btn, loading && s.btnDisabled]}
-                onPress={handleForgotVerifyOTP}
-                disabled={loading}
-                activeOpacity={0.85}
-              >
+              <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleForgotVerifyOTP} disabled={loading} activeOpacity={0.85}>
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Verify OTP</Text>}
               </TouchableOpacity>
             </View>
@@ -467,43 +435,28 @@ export default function LoginScreen() {
             <View style={s.card}>
               <Text style={s.cardTitle}>Reset Password</Text>
               <Text style={s.cardSub}>Create a new password for +91 {phone}</Text>
-
               <View style={s.fieldWrap}>
                 <TextInput
-                  style={[s.input, s.inputPr]}
-                  value={password}
-                  onChangeText={setPassword}
+                  style={[s.input, s.inputPr]} value={password} onChangeText={setPassword}
                   placeholder="New Password (min 6 characters)"
-                  placeholderTextColor={Colors.textMuted}
-                  secureTextEntry={!showPassword}
+                  placeholderTextColor={Colors.textMuted} secureTextEntry={!showPassword}
                 />
                 <TouchableOpacity style={s.eyeBtn} onPress={() => setShowPassword(!showPassword)}>
                   <Text style={s.eyeIcon}>{showPassword ? '🙈' : '👁️'}</Text>
                 </TouchableOpacity>
               </View>
-
               <View style={s.fieldWrap}>
                 <TextInput
-                  style={[s.input, s.inputPr]}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
+                  style={[s.input, s.inputPr]} value={confirmPassword} onChangeText={setConfirmPassword}
                   placeholder="Confirm Password"
-                  placeholderTextColor={Colors.textMuted}
-                  secureTextEntry={!showConfirm}
+                  placeholderTextColor={Colors.textMuted} secureTextEntry={!showConfirm}
                 />
                 <TouchableOpacity style={s.eyeBtn} onPress={() => setShowConfirm(!showConfirm)}>
                   <Text style={s.eyeIcon}>{showConfirm ? '🙈' : '👁️'}</Text>
                 </TouchableOpacity>
               </View>
-
               {error ? <Text style={s.error}>{error}</Text> : null}
-
-              <TouchableOpacity
-                style={[s.btn, loading && s.btnDisabled]}
-                onPress={handleResetPassword}
-                disabled={loading}
-                activeOpacity={0.85}
-              >
+              <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleResetPassword} disabled={loading} activeOpacity={0.85}>
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Reset Password</Text>}
               </TouchableOpacity>
             </View>
@@ -519,31 +472,17 @@ const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.cream },
   flex: { flex: 1 },
   scroll: { flexGrow: 1, paddingBottom: 40 },
-
   logoWrap: { alignItems: 'center', paddingTop: 60, paddingBottom: 32 },
-  logoBox: {
-    width: 80, height: 80,
-    backgroundColor: Colors.primary,
-    borderRadius: 24, alignItems: 'center',
-    justifyContent: 'center', marginBottom: Spacing.md,
-  },
-  logoEmoji: { fontSize: 40 },
   logoName: { fontSize: 28, fontWeight: '800', color: Colors.primary, letterSpacing: -0.5 },
   logoSub: { fontSize: FontSize.sm, color: Colors.textMuted, marginTop: 4 },
-
   card: {
-    backgroundColor: Colors.white,
-    borderRadius: Radius.xl,
-    padding: Spacing.xxl,
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
+    backgroundColor: Colors.white, borderRadius: Radius.xl,
+    padding: Spacing.xxl, marginHorizontal: Spacing.lg, marginBottom: Spacing.lg,
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08, shadowRadius: 16, elevation: 6,
   },
-
   cardTitle: { fontSize: FontSize.xl, fontWeight: '800', color: Colors.text, marginBottom: Spacing.xs },
   cardSub: { fontSize: FontSize.sm, color: Colors.textMuted, marginBottom: Spacing.lg },
-
   fieldWrap: { position: 'relative', marginBottom: Spacing.md },
   input: {
     borderBottomWidth: 1.5, borderBottomColor: Colors.border,
@@ -553,34 +492,19 @@ const s = StyleSheet.create({
   inputPr: { paddingRight: 40 },
   eyeBtn: { position: 'absolute', right: 4, top: 12 },
   eyeIcon: { fontSize: 18 },
-
   forgotBtn: { alignSelf: 'flex-end', marginBottom: Spacing.lg, padding: 4 },
   forgotText: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600' },
-
   error: { color: Colors.error, fontSize: FontSize.sm, marginBottom: Spacing.md },
-
-  btn: {
-    backgroundColor: Colors.primary,
-    padding: 16, borderRadius: Radius.full,
-    alignItems: 'center', marginTop: Spacing.sm,
-  },
+  btn: { backgroundColor: Colors.primary, padding: 16, borderRadius: Radius.full, alignItems: 'center', marginTop: Spacing.sm },
   btnDisabled: { backgroundColor: '#a0b5ac' },
   btnText: { color: Colors.white, fontSize: FontSize.md, fontWeight: '700' },
-
   switchWrap: { alignItems: 'center', marginTop: Spacing.xl, padding: 8 },
   switchText: { fontSize: FontSize.sm, color: Colors.textMuted },
   switchLink: { color: Colors.primary, fontWeight: '700' },
-
   backRow: { marginBottom: Spacing.md, padding: 4 },
   backText: { color: Colors.textMuted, fontSize: FontSize.sm },
-
-  sentBadge: {
-    backgroundColor: Colors.primaryPale,
-    borderRadius: Radius.sm, padding: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
+  sentBadge: { backgroundColor: Colors.primaryPale, borderRadius: Radius.sm, padding: Spacing.md, marginBottom: Spacing.lg },
   sentText: { color: Colors.primary, fontSize: FontSize.sm, fontWeight: '600' },
-
   resendWrap: { alignItems: 'center', marginTop: Spacing.lg, padding: 8 },
   resendText: { fontSize: FontSize.sm, color: Colors.textMuted },
 });

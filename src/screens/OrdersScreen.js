@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  RefreshControl, ActivityIndicator,
+  RefreshControl, ActivityIndicator, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getMyOrders, getMyOrder } from '../api/client';
@@ -105,16 +105,17 @@ function OrderCard({ order, onPress, expanded, detail }) {
       {expanded && detail && (
         <View style={styles.expanded}>
 
-          {/* Timeline */}
           <OrderTimeline status={order.status} />
 
-          {/* Items */}
           {detail.items?.length > 0 && (
             <View style={styles.itemsSection}>
               <Text style={styles.sectionLabel}>Items Ordered</Text>
               {detail.items.map(i => (
                 <View key={i.id} style={styles.detailItem}>
-                  <Text style={styles.detailEmoji}>{i.image_emoji}</Text>
+                  {i.image_url
+                    ? <Image source={{ uri: i.image_url }} style={styles.detailImage} />
+                    : <Text style={styles.detailEmoji}>{i.image_emoji}</Text>
+                  }
                   <Text style={styles.detailName}>{i.name} × {i.quantity} {i.unit}</Text>
                   <Text style={styles.detailPrice}>₹{(i.price * i.quantity).toFixed(0)}</Text>
                 </View>
@@ -122,7 +123,6 @@ function OrderCard({ order, onPress, expanded, detail }) {
             </View>
           )}
 
-          {/* Price breakdown */}
           <View style={styles.priceBreakdown}>
             <Text style={styles.sectionLabel}>Price Details</Text>
             <View style={styles.priceRow}>
@@ -142,12 +142,11 @@ function OrderCard({ order, onPress, expanded, detail }) {
               </Text>
             </View>
             <View style={[styles.priceRow, styles.priceTotalRow]}>
-              <Text style={styles.priceTotalLabel}>Total Paid</Text>
+              <Text style={styles.priceTotalLabel}>Order Total (Pay on Delivery)</Text>
               <Text style={styles.priceTotalVal}>₹{order.total}</Text>
             </View>
           </View>
 
-          {/* Delivery address */}
           {order.address && (
             <View style={styles.addressRow}>
               <Text style={styles.addressIcon}>📍</Text>
@@ -290,7 +289,6 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: FontSize.xs, fontWeight: '700' },
 
   expandHint: { fontSize: FontSize.xs, color: Colors.textMuted, textAlign: 'center', marginTop: Spacing.md },
-
   expanded: { marginTop: Spacing.lg, borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: Spacing.lg },
 
   timeline: { marginBottom: Spacing.lg },
@@ -314,6 +312,7 @@ const styles = StyleSheet.create({
   itemsSection: { marginBottom: Spacing.lg },
   detailItem: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.xs },
   detailEmoji: { fontSize: 18 },
+  detailImage: { width: 32, height: 32, borderRadius: 6 },
   detailName: { flex: 1, fontSize: FontSize.sm, color: Colors.text },
   detailPrice: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.primary },
 

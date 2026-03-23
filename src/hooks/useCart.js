@@ -3,35 +3,63 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CartContext = createContext(null);
 
-export function CartProvider({ children }) {
+export function CartProvider({ children, userId }) {
   const [cart, setCart] = useState({});
 
-  useEffect(() => { loadCart(); }, []);
+  useEffect(() => {
+    // Clear cart and reload when user changes
+    setCart({});
+    if (userId) {
+      loadCart(userId);
+    } else {
+      // User logged out — clear cart from storage
+      AsyncStorage.removeItem('meecart_cart').catch(() => {});
+    }
+  }, [userId]);
 
-  async function loadCart() {
+  async function loadCart(uid) {
     try {
-      const stored = await AsyncStorage.getItem('meecart_cart');
+      const key = `meecart_cart_${uid}`;
+      const stored = await AsyncStorage.getItem(key);
       if (stored) setCart(JSON.parse(stored));
-    } catch {}
+      else setCart({});
+    } catch {
+      setCart({});
+    }
   }
 
   async function saveCart(newCart) {
     setCart(newCart);
-    await AsyncStorage.setItem('meecart_cart', JSON.stringify(newCart));
+    if (userId) {
+      await AsyncStorage.setItem(`meecart_cart_${userId}`, JSON.stringify(newCart));
+    }
   }
 
   function addToCart(product) {
+    const id = product.product_id || product.id;
+    if (!id) return;
+
+    // Flash deals get a special key to avoid collision with regular products
+    const cartKey = product.is_flash_deal ? `flash_${id}` : String(id);
+
     const updated = { ...cart };
-    if (updated[product.id]) {
-      updated[product.id].qty += 1;
+
+    if (updated[cartKey]) {
+      // Block flash deals from being added more than once
+      if (updated[cartKey].is_flash_deal) {
+        return;
+      }
+      updated[cartKey].qty += 1;
     } else {
-      updated[product.id] = {
+      updated[cartKey] = {
         qty: 1,
         name: product.name,
         price: product.price,
         unit: product.unit,
-        emoji: product.image_emoji,
-        product_id: product.id,
+        emoji: product.emoji || product.image_emoji || '🥦',
+        image_url: product.image_url || null,
+        product_id: id,
+        is_flash_deal: product.is_flash_deal || false,
       };
     }
     saveCart(updated);
@@ -39,9 +67,15 @@ export function CartProvider({ children }) {
 
   function removeFromCart(productId) {
     const updated = { ...cart };
-    if (updated[productId]) {
-      updated[productId].qty -= 1;
-      if (updated[productId].qty <= 0) delete updated[productId];
+    // Try both regular and flash deal keys
+    const key = updated[productId] ? productId : `flash_${productId}`;
+    if (updated[key]) {
+      if (updated[key].is_flash_deal) {
+        delete updated[key]; // remove flash deal entirely
+      } else {
+        updated[key].qty -= 1;
+        if (updated[key].qty <= 0) delete updated[key];
+      }
     }
     saveCart(updated);
   }
@@ -56,13 +90,8 @@ export function CartProvider({ children }) {
 
   return (
     <CartContext.Provider value={{
-      cart,
-      cartItems,
-      cartCount,
-      cartTotal,
-      addToCart,
-      removeFromCart,
-      clearCart,
+      cart, cartItems, cartCount, cartTotal,
+      addToCart, removeFromCart, clearCart,
     }}>
       {children}
     </CartContext.Provider>

@@ -23,8 +23,8 @@ export const sendOTP = (phone, purpose = 'signup') =>
 export const verifyOTP = (phone, code, purpose = 'signup') =>
   request('POST', '/api/auth/verify-otp', { phone, code, purpose });
 
-export const signup = (phone, name, address, password) =>
-  request('POST', '/api/auth/signup', { phone, name, address, password });
+export const signup = (phone, name, address, password, referral_code) =>
+  request('POST', '/api/auth/signup', { phone, name, address, password, referral_code });
 
 export const login = (phone, password) =>
   request('POST', '/api/auth/login', { phone, password });
@@ -64,9 +64,17 @@ export const getMyOrder = (id) =>
 export const applyPromoCode = (code, order_total) =>
   request('POST', '/api/admin/promos/apply', { code, order_total });
 
+// ── REFERRAL ──────────────────────────────────────────
+export const getReferralStats = () =>
+  request('GET', '/api/auth/referral-stats');
+
 // ── SETTINGS ──────────────────────────────────────────
 export const getSettings = () =>
   request('GET', '/api/settings');
+
+// ── FLASH DEALS ───────────────────────────────────────
+export const getFlashDeals = () =>
+  request('GET', '/api/admin/flash-deals/public');
 
 // ── BANNERS ───────────────────────────────────────────
 export const getBanners = () =>

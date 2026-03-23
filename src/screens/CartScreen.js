@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  StyleSheet, Alert,
+  StyleSheet, Alert, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -12,7 +12,10 @@ import { Colors, FontSize, Spacing, Radius, Shadow } from '../utils/theme';
 function CartItem({ item, onInc, onDec }) {
   return (
     <View style={styles.item}>
-      <Text style={styles.itemEmoji}>{item.emoji}</Text>
+      {item.image_url
+        ? <Image source={{ uri: item.image_url }} style={styles.itemImage} />
+        : <Text style={styles.itemEmoji}>{item.emoji}</Text>
+      }
       <View style={styles.itemInfo}>
         <Text style={styles.itemName}>{item.name}</Text>
         <Text style={styles.itemUnit}>₹{item.price} / {item.unit}</Text>
@@ -67,11 +70,7 @@ export default function CartScreen({ navigation }) {
           <Text style={styles.emptyIcon}>🛒</Text>
           <Text style={styles.emptyTitle}>Your cart is empty</Text>
           <Text style={styles.emptySub}>Add some fresh vegetables!</Text>
-          <TouchableOpacity
-            style={styles.shopBtn}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.85}
-          >
+          <TouchableOpacity style={styles.shopBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
             <Text style={styles.shopBtnText}>Browse Vegetables →</Text>
           </TouchableOpacity>
         </View>
@@ -93,11 +92,18 @@ export default function CartScreen({ navigation }) {
 
       <FlatList
         data={cartItems}
-        keyExtractor={i => String(i.product_id)}
+        keyExtractor={i => i.is_flash_deal ? `flash_${i.product_id}` : String(i.product_id)}
         renderItem={({ item }) => (
           <CartItem
             item={item}
-            onInc={() => { addToCart({ id: item.product_id, ...item }); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+            onInc={() => {
+              if (item.is_flash_deal) {
+                Alert.alert('Flash Deal', 'Flash deals can only be claimed once per order!');
+                return;
+              }
+              addToCart({ id: item.product_id, product_id: item.product_id, ...item });
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }}
             onDec={() => { removeFromCart(item.product_id); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
           />
         )}
@@ -108,7 +114,7 @@ export default function CartScreen({ navigation }) {
           <View style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Order Summary</Text>
             {cartItems.map(i => (
-              <View key={i.product_id} style={styles.summaryRow}>
+              <View key={i.is_flash_deal ? `flash_${i.product_id}` : String(i.product_id)} style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{i.name} × {i.qty}</Text>
                 <Text style={styles.summaryVal}>₹{i.qty * i.price}</Text>
               </View>
@@ -134,11 +140,7 @@ export default function CartScreen({ navigation }) {
           <Text style={styles.footerLabel}>Total</Text>
           <Text style={styles.footerTotal}>₹{cartTotal}</Text>
         </View>
-        <TouchableOpacity
-          style={styles.checkoutBtn}
-          onPress={handleCheckout}
-          activeOpacity={0.9}
-        >
+        <TouchableOpacity style={styles.checkoutBtn} onPress={handleCheckout} activeOpacity={0.9}>
           <Text style={styles.checkoutBtnText}>Proceed to Checkout →</Text>
         </TouchableOpacity>
       </View>
@@ -157,20 +159,19 @@ const styles = StyleSheet.create({
   backIcon: { fontSize: 22, color: Colors.text },
   headerTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
   clearText: { color: Colors.error, fontSize: FontSize.sm, fontWeight: '600' },
-
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl },
   emptyIcon: { fontSize: 64, marginBottom: Spacing.lg },
   emptyTitle: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.text, marginBottom: Spacing.sm },
   emptySub: { fontSize: FontSize.sm, color: Colors.textMuted, marginBottom: Spacing.xxl },
   shopBtn: { backgroundColor: Colors.primary, paddingVertical: 14, paddingHorizontal: Spacing.xxl, borderRadius: Radius.md },
   shopBtnText: { color: Colors.white, fontSize: FontSize.md, fontWeight: '700' },
-
   item: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
     backgroundColor: Colors.white, borderRadius: Radius.md, padding: Spacing.md,
     ...Shadow.sm,
   },
   itemEmoji: { fontSize: 28 },
+  itemImage: { width: 48, height: 48, borderRadius: 8 },
   itemInfo: { flex: 1 },
   itemName: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
   itemUnit: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
@@ -180,7 +181,6 @@ const styles = StyleSheet.create({
   qNum: { color: Colors.white, fontWeight: '700', fontSize: FontSize.sm, minWidth: 24, textAlign: 'center' },
   itemTotal: { fontWeight: '700', fontSize: FontSize.sm, color: Colors.primary, minWidth: 48, textAlign: 'right' },
   sep: { height: Spacing.sm },
-
   summaryCard: {
     backgroundColor: Colors.white, borderRadius: Radius.lg,
     padding: Spacing.lg, marginTop: Spacing.lg, ...Shadow.sm,
@@ -199,11 +199,9 @@ const styles = StyleSheet.create({
   codIcon: { fontSize: 24 },
   codTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.primary },
   codSub: { fontSize: FontSize.xs, color: Colors.primaryLight, marginTop: 2 },
-
   footer: {
     backgroundColor: Colors.white, padding: Spacing.lg,
-    borderTopWidth: 1, borderTopColor: Colors.border,
-    ...Shadow.md,
+    borderTopWidth: 1, borderTopColor: Colors.border, ...Shadow.md,
   },
   footerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
   footerLabel: { fontSize: FontSize.md, fontWeight: '600', color: Colors.text },

@@ -31,9 +31,10 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font",
-      [
-        "expo-build-properties",
+  "expo-font",
+  "expo-notifications",
+  [
+    "expo-build-properties",
         {
           "android": {
             "usesCleartextTraffic": true

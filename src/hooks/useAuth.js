@@ -39,7 +39,7 @@ export function AuthProvider({ children }) {
   }
 
   async function logout() {
-    await AsyncStorage.multiRemove(['meecart_token', 'meecart_user']);
+    await AsyncStorage.multiRemove(['meecart_token', 'meecart_user', 'meecart_cart']);
     setToken(null);
     setUser(null);
   }
