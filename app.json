@@ -8,10 +8,10 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-  "image": "./assets/splash-icon.png",
-  "resizeMode": "contain",
-  "backgroundColor": "#2d6a4f"
-},
+      "image": "./assets/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#2d6a4f"
+    },
     "ios": {
       "supportsTablet": true
     },
@@ -45,7 +45,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/logo.png",
+          "icon": "./assets/android-icon-monochrome.png",
           "color": "#2d6a4f",
           "sounds": [],
           "androidMode": "default",
