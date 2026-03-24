@@ -3,7 +3,6 @@
     "name": "Meecart",
     "slug": "meecart",
     "version": "1.0.0",
-    "newArchEnabled": false,
     "orientation": "portrait",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
@@ -16,20 +15,16 @@
       "supportsTablet": true
     },
     "android": {
-  "googleServicesFile": "./google-services.json",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#2d6a4f",
         "foregroundImage": "./assets/logo.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-  "package": "com.meecart",
-  "usesCleartextTraffic": true,
-  "minSdkVersion": 29,
-  "targetSdkVersion": 34,
-  "compileSdkVersion": 34
-},
+      "package": "com.meecart"
+    },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/logo.png"
     },
     "plugins": [
       "expo-font",
@@ -37,7 +32,10 @@
         "expo-build-properties",
         {
           "android": {
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "minSdkVersion": 29,
+            "targetSdkVersion": 34,
+            "compileSdkVersion": 34
           }
         }
       ],
@@ -46,9 +44,7 @@
         {
           "icon": "./assets/android-icon-monochrome.png",
           "color": "#2d6a4f",
-          "sounds": [],
-          "androidMode": "default",
-          "androidCollapsedTitle": "Meecart"
+          "sounds": []
         }
       ]
     ],
