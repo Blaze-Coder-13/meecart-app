@@ -19,6 +19,68 @@ const STATUS_CONFIG = {
 
 const TIMELINE_STEPS = ['pending', 'confirmed', 'packing', 'out_for_delivery', 'delivered'];
 
+function formatUpdateTime(value) {
+  if (!value) return '';
+  return new Date(value).toLocaleString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function buildOrderUpdates(order, detail) {
+  const rawUpdates = Array.isArray(detail?.updates) ? detail.updates : [];
+  const updatesByStatus = new Map();
+
+  rawUpdates.forEach((update, index) => {
+    if (!update?.status) return;
+    updatesByStatus.set(update.status, {
+      ...update,
+      id: update.id || `${update.status}-${index}`,
+    });
+  });
+
+  if (order?.status === 'cancelled' && !updatesByStatus.has('cancelled')) {
+    updatesByStatus.set('cancelled', {
+      id: 'fallback-cancelled',
+      status: 'cancelled',
+      title: 'Order Cancelled',
+      message: 'This order was cancelled.',
+      created_at: detail?.updated_at || order?.updated_at || order?.created_at,
+    });
+  }
+
+  const currentIdx = TIMELINE_STEPS.indexOf(order?.status);
+  if (currentIdx >= 0) {
+    TIMELINE_STEPS.slice(0, currentIdx + 1).forEach((status, index) => {
+      if (updatesByStatus.has(status)) return;
+      const cfg = STATUS_CONFIG[status];
+      updatesByStatus.set(status, {
+        id: `fallback-${status}`,
+        status,
+        title: cfg?.label || 'Order Update',
+        message:
+          status === order?.status
+            ? `Your order is now ${cfg?.label?.toLowerCase() || 'updated'}.`
+            : `${cfg?.label || 'Order step'} completed.`,
+        created_at:
+          status === order?.status
+            ? detail?.updated_at || order?.updated_at || order?.created_at
+            : order?.created_at,
+      });
+    });
+  }
+
+  return Array.from(updatesByStatus.values()).sort((a, b) => {
+    const aIdx = TIMELINE_STEPS.indexOf(a.status);
+    const bIdx = TIMELINE_STEPS.indexOf(b.status);
+    const safeA = aIdx === -1 ? 999 : aIdx;
+    const safeB = bIdx === -1 ? 999 : bIdx;
+    return safeA - safeB;
+  });
+}
+
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
   return (
@@ -86,19 +148,18 @@ function OrderUpdates({ updates }) {
     <View style={styles.updatesSection}>
       <Text style={styles.sectionLabel}>Order Updates</Text>
       {updates.map(update => (
-        <View key={update.id} style={styles.updateRow}>
-          <View style={styles.updateDot} />
-          <View style={styles.updateContent}>
-            <Text style={styles.updateTitle}>{update.title}</Text>
-            <Text style={styles.updateMessage}>{update.message}</Text>
-            <Text style={styles.updateMeta}>
-              {new Date(update.created_at).toLocaleString('en-IN', {
-                day: 'numeric',
-                month: 'short',
-                hour: 'numeric',
-                minute: '2-digit',
-              })}
+        <View key={update.id} style={styles.updateCard}>
+          <View style={styles.updateIconWrap}>
+            <Text style={styles.updateIcon}>
+              {(STATUS_CONFIG[update.status] || STATUS_CONFIG.pending).icon}
             </Text>
+          </View>
+          <View style={styles.updateContent}>
+            <View style={styles.updateHeader}>
+              <Text style={styles.updateTitle}>{update.title}</Text>
+              <Text style={styles.updateMeta}>{formatUpdateTime(update.created_at)}</Text>
+            </View>
+            <Text style={styles.updateMessage}>{update.message}</Text>
           </View>
         </View>
       ))}
@@ -114,6 +175,7 @@ function OrderCard({ order, onPress, expanded, detail }) {
   const subtotal = detail?.subtotal || order.total;
   const deliveryCharges = detail?.delivery_charges || 0;
   const discount = detail?.discount || 0;
+  const displayUpdates = buildOrderUpdates(order, detail);
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
@@ -133,7 +195,7 @@ function OrderCard({ order, onPress, expanded, detail }) {
         <View style={styles.expanded}>
 
           <OrderTimeline status={order.status} />
-          <OrderUpdates updates={detail.updates} />
+          <OrderUpdates updates={displayUpdates} />
 
           {detail.items?.length > 0 && (
             <View style={styles.itemsSection}>
@@ -211,6 +273,7 @@ export default function OrdersScreen({ navigation }) {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    setOrderDetails({});
     await loadOrders();
     setRefreshing(false);
   }, []);
@@ -218,12 +281,10 @@ export default function OrdersScreen({ navigation }) {
   async function toggleOrder(id) {
     if (expandedId === id) { setExpandedId(null); return; }
     setExpandedId(id);
-    if (!orderDetails[id]) {
-      try {
-        const { data } = await getMyOrder(id);
-        setOrderDetails(prev => ({ ...prev, [id]: data }));
-      } catch {}
-    }
+    try {
+      const { data } = await getMyOrder(id);
+      setOrderDetails(prev => ({ ...prev, [id]: data }));
+    } catch {}
   }
 
   if (!user) {
@@ -337,19 +398,30 @@ const styles = StyleSheet.create({
 
   sectionLabel: { fontSize: FontSize.xs, fontWeight: '700', color: Colors.textMuted, marginBottom: Spacing.sm, textTransform: 'uppercase', letterSpacing: 0.5 },
 
-  updatesSection: { marginBottom: Spacing.lg },
-  updateRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.md },
-  updateDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.primary,
-    marginTop: 6,
+  updatesSection: { marginBottom: Spacing.lg, gap: Spacing.sm },
+  updateCard: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    backgroundColor: Colors.cream,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
+  updateIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  updateIcon: { fontSize: 15 },
   updateContent: { flex: 1 },
-  updateTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text, marginBottom: 2 },
+  updateHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: Spacing.sm, marginBottom: 4 },
+  updateTitle: { flex: 1, fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
   updateMessage: { fontSize: FontSize.sm, color: Colors.textMuted, lineHeight: 18 },
-  updateMeta: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 4 },
+  updateMeta: { fontSize: FontSize.xs, color: Colors.textMuted },
 
   itemsSection: { marginBottom: Spacing.lg },
   detailItem: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.xs },
