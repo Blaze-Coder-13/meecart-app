@@ -10,6 +10,8 @@ import { sendOTP, verifyOTP, signup, login, resetPassword, getSettings } from '.
 import { useAuth } from '../hooks/useAuth';
 import { Colors, FontSize, Spacing, Radius } from '../utils/theme';
 
+const LOCAL_LOGO = require('../../assets/logo.png');
+
 function AppLogo({ size = 60 }) {
   const [logo, setLogo] = useState('');
   const [name, setName] = useState('Meecart');
@@ -21,23 +23,12 @@ function AppLogo({ size = 60 }) {
     }).catch(() => {});
   }, []);
 
-  if (logo) {
-    return (
-      <Image
-        source={{ uri: logo }}
-        style={{ width: size, height: size, borderRadius: size * 0.2, marginBottom: 8 }}
-        resizeMode="contain"
-      />
-    );
-  }
   return (
-    <View style={{
-      width: size, height: size, borderRadius: size * 0.2,
-      backgroundColor: Colors.primary,
-      alignItems: 'center', justifyContent: 'center', marginBottom: 8,
-    }}>
-      <Text style={{ fontSize: size * 0.45 }}>🛒</Text>
-    </View>
+    <Image
+      source={logo ? { uri: logo } : LOCAL_LOGO}
+      style={{ width: size, height: size, borderRadius: size * 0.2, marginBottom: 8 }}
+      resizeMode="contain"
+    />
   );
 }
 
