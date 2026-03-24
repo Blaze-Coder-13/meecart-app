@@ -233,7 +233,6 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Notifications')}>
             <Text style={styles.iconBtnEmoji}>🔔</Text>
-            <Text style={styles.iconBtnLabel}>Alerts</Text>
             {hasUnreadNotifications ? <View style={styles.notifDot} /> : null}
           </TouchableOpacity>
           <TouchableOpacity style={styles.cartBtn} onPress={() => navigation.navigate('Cart')}>
@@ -330,16 +329,14 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   iconBtn: {
     backgroundColor: Colors.primaryPale,
-    minWidth: 68,
-    height: 52,
-    paddingHorizontal: Spacing.md,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: Radius.full,
     position: 'relative',
   },
-  iconBtnEmoji: { fontSize: 18 },
-  iconBtnLabel: { fontSize: 10, color: Colors.primary, fontWeight: '800', marginTop: 1 },
+  iconBtnEmoji: { fontSize: 19 },
   notifDot: {
     position: 'absolute',
     top: 8,
