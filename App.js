@@ -11,6 +11,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 const LOCAL_LOGO = require('./assets/logo.png');
 const SETTINGS_CACHE_KEY = 'meecart_app_settings';
 const BACKEND = 'https://meecart-backend-production.up.railway.app';
+const SETTINGS_FETCH_TIMEOUT_MS = 5000;
 
 function SplashView({ logo, name }) {
   return (
@@ -47,12 +48,20 @@ function AppContent() {
         const { logo, name } = JSON.parse(cached);
         if (logo) setAppLogo(logo);
         if (name) setAppName(name);
-        setReady(true);
       }
     } catch {}
 
+    setReady(true);
+
     try {
-      const res = await fetch(`${BACKEND}/api/settings`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), SETTINGS_FETCH_TIMEOUT_MS);
+      let res;
+      try {
+        res = await fetch(`${BACKEND}/api/settings`, { signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
+      }
       const data = await res.json();
       const logo = data.app_logo_url || '';
       const name = data.app_name || 'Meecart';
@@ -60,8 +69,6 @@ function AppContent() {
       setAppName(name);
       await AsyncStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify({ logo, name }));
     } catch {}
-
-    setReady(true);
   }
 
   if (!ready || loading) {

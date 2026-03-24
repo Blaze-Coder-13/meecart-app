@@ -19,39 +19,32 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
+          cache: gradle
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ hashFiles('**/*.gradle*') }}
-
       - name: Generate Android files
-        run: npx expo prebuild --platform android --clean
+        run: npx expo prebuild --platform android --non-interactive
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Build APK
+      - name: Build release APK
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon --max-workers=2
+          ./gradlew assembleRelease --no-daemon --build-cache --max-workers=2
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: meecart-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: meecart-release
+          path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
