@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getCustomerNotifications } from '../api/client';
+import { getCustomerAnnouncements } from '../api/client';
 import { Colors, FontSize, Spacing, Radius, Shadow } from '../utils/theme';
 
 const LAST_READ_NOTIFICATION_ID_KEY = 'meecart_last_read_notification_id';
@@ -36,7 +36,7 @@ export default function NotificationsScreen({ navigation }) {
 
   const loadNotifications = useCallback(async () => {
     try {
-      const { data } = await getCustomerNotifications();
+      const { data } = await getCustomerAnnouncements();
       setNotifications(data || []);
       if (data?.[0]?.id) {
         await AsyncStorage.setItem(LAST_READ_NOTIFICATION_ID_KEY, String(data[0].id));

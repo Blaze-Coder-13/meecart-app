@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import { getProducts, getCategories, getBanners, getSettings, getCustomerNotifications } from '../api/client';
+import { getProducts, getCategories, getBanners, getSettings, getCustomerAnnouncements } from '../api/client';
 const LOCAL_LOGO = require('../../assets/logo.png');
 import { useCart } from '../hooks/useCart';
 import { useAuth } from '../hooks/useAuth';
@@ -70,7 +70,7 @@ export default function HomeScreen({ navigation }) {
   async function syncNotificationState() {
     try {
       const [{ data }, lastReadId] = await Promise.all([
-        getCustomerNotifications(),
+        getCustomerAnnouncements(),
         AsyncStorage.getItem(LAST_READ_NOTIFICATION_ID_KEY),
       ]);
 

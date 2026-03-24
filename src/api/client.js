@@ -41,8 +41,11 @@ export const updateProfile = (data) =>
 export const savePushToken = (token, phone) =>
   request('POST', '/api/auth/push-token', { token, phone });
 
+export const getCustomerAnnouncements = () =>
+  request('GET', '/api/auth/announcements');
+
 export const getCustomerNotifications = () =>
-  request('GET', '/api/auth/notifications');
+  getCustomerAnnouncements();
 
 // ── PRODUCTS ──────────────────────────────────────────
 export const getProducts = (params = {}) => {
