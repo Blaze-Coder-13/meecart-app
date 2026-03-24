@@ -207,14 +207,19 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.headerSub}>What would you like today?</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.cartBtn} onPress={() => navigation.navigate('Cart')}>
-          <Text style={styles.cartBtnText}>🛒</Text>
-          {cartCount > 0 && (
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>{cartCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Notifications')}>
+            <Text style={styles.iconBtnText}>Bell</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.cartBtn} onPress={() => navigation.navigate('Cart')}>
+            <Text style={styles.cartBtnText}>🛒</Text>
+            {cartCount > 0 && (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>{cartCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -297,6 +302,14 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
   backIcon: { fontSize: 22, color: Colors.text },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+  iconBtn: {
+    backgroundColor: Colors.primaryPale,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    borderRadius: Radius.full,
+  },
+  iconBtnText: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: '800' },
   cartBtn: { position: 'relative', padding: Spacing.sm },
   cartBtnText: { fontSize: 26 },
   cartBadge: {

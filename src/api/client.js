@@ -38,6 +38,12 @@ export const getMe = () =>
 export const updateProfile = (data) =>
   request('PUT', '/api/auth/profile', data);
 
+export const savePushToken = (token, phone) =>
+  request('POST', '/api/auth/push-token', { token, phone });
+
+export const getCustomerNotifications = () =>
+  request('GET', '/api/auth/notifications');
+
 // ── PRODUCTS ──────────────────────────────────────────
 export const getProducts = (params = {}) => {
   const query = new URLSearchParams(params).toString();

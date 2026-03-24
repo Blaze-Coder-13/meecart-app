@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -24,7 +25,16 @@ export async function registerForPushNotifications() {
 
   if (finalStatus !== 'granted') return null;
 
-  const token = (await Notifications.getExpoPushTokenAsync()).data;
+  const projectId =
+    Constants?.expoConfig?.extra?.eas?.projectId ||
+    Constants?.easConfig?.projectId;
+
+  if (!projectId) {
+    console.warn('Expo project ID is missing, cannot register push token.');
+    return null;
+  }
+
+  const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
   await AsyncStorage.setItem('push_token', token);
 
   if (Platform.OS === 'android') {
