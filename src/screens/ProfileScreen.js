@@ -261,7 +261,7 @@ export default function ProfileScreen({ navigation }) {
           {appSettings.app_contact_address ? (
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Address</Text>
-              <Text style={[styles.infoVal, { flex: 1 }]}>{appSettings.app_contact_address}</Text>
+              <Text style={[styles.infoVal, { flex: 1, textAlign: 'right' }]}>{appSettings.app_contact_address}</Text>
             </View>
           ) : null}
         </View>
