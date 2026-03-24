@@ -7,6 +7,7 @@ import {
   FlatList,
   RefreshControl,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -81,6 +82,9 @@ export default function NotificationsScreen({ navigation }) {
           }
           renderItem={({ item }) => (
             <View style={styles.card}>
+              {item.image_url ? (
+                <Image source={{ uri: item.image_url }} style={styles.cardImage} resizeMode="cover" />
+              ) : null}
               <Text style={styles.cardTitle}>{item.title}</Text>
               <Text style={styles.cardBody}>{item.body}</Text>
               <Text style={styles.cardMeta}>{formatDate(item.created_at)}</Text>
@@ -125,6 +129,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     ...Shadow.sm,
+  },
+  cardImage: {
+    width: '100%',
+    height: 170,
+    borderRadius: Radius.md,
+    marginBottom: Spacing.md,
+    backgroundColor: Colors.cream,
   },
   cardTitle: {
     fontSize: FontSize.md,
