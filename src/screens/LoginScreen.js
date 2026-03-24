@@ -119,6 +119,15 @@ export default function LoginScreen() {
 
   function goTo(s) { setError(''); setOtpCode(''); setScreen(s); }
 
+  function goToLoginWithPhone(nextPhone, message) {
+    setOtpCode('');
+    setPassword('');
+    setConfirmPassword('');
+    setScreen('login');
+    if (nextPhone) setPhone(nextPhone);
+    setError(message || '');
+  }
+
   async function handleLogin() {
     setError('');
     if (!/^\d{10}$/.test(phone)) { setError('Enter a valid 10-digit mobile number'); return; }
@@ -143,7 +152,12 @@ export default function LoginScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       goTo('register_otp');
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to send OTP.');
+      const message = err.response?.data?.error || 'Failed to send OTP.';
+      if (/already registered|please login/i.test(message)) {
+        goToLoginWithPhone(phone, 'This number is already registered. Please login.');
+      } else {
+        setError(message);
+      }
     } finally { setLoading(false); }
   }
 
