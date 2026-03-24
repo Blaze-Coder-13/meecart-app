@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "newArchEnabled": false,
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/logo.png",
@@ -17,12 +17,11 @@
     },
     "android": {
   "googleServicesFile": "./google-services.json",
-  "adaptiveIcon": {
-    "backgroundColor": "#E6F4FE",
-    "foregroundImage": "./assets/android-icon-foreground.png",
-    "backgroundImage": "./assets/android-icon-background.png",
-    "monochromeImage": "./assets/android-icon-monochrome.png"
-  },
+      "adaptiveIcon": {
+        "backgroundColor": "#2d6a4f",
+        "foregroundImage": "./assets/logo.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
   "package": "com.meecart",
   "usesCleartextTraffic": true,
   "minSdkVersion": 29,
