@@ -32,14 +32,24 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-        "plugins": [
+    "plugins": [
       "expo-font",
       [
-    "expo-build-properties",
+        "expo-build-properties",
         {
           "android": {
             "usesCleartextTraffic": true
           }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/logo.png",
+          "color": "#2d6a4f",
+          "sounds": [],
+          "androidMode": "default",
+          "androidCollapsedTitle": "Meecart"
         }
       ]
     ],

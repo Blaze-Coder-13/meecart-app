@@ -38,10 +38,12 @@ export async function registerForPushNotifications() {
   await AsyncStorage.setItem('push_token', token);
 
   if (Platform.OS === 'android') {
-    Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'Meecart Notifications',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#2d6a4f',
+      sound: 'default',
     });
   }
 
