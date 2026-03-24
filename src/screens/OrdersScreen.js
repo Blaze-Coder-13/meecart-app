@@ -79,6 +79,33 @@ function OrderTimeline({ status }) {
   );
 }
 
+function OrderUpdates({ updates }) {
+  if (!updates?.length) return null;
+
+  return (
+    <View style={styles.updatesSection}>
+      <Text style={styles.sectionLabel}>Order Updates</Text>
+      {updates.map(update => (
+        <View key={update.id} style={styles.updateRow}>
+          <View style={styles.updateDot} />
+          <View style={styles.updateContent}>
+            <Text style={styles.updateTitle}>{update.title}</Text>
+            <Text style={styles.updateMessage}>{update.message}</Text>
+            <Text style={styles.updateMeta}>
+              {new Date(update.created_at).toLocaleString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                hour: 'numeric',
+                minute: '2-digit',
+              })}
+            </Text>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function OrderCard({ order, onPress, expanded, detail }) {
   const date = new Date(order.created_at).toLocaleDateString('en-IN', {
     day: 'numeric', month: 'short', year: 'numeric',
@@ -106,6 +133,7 @@ function OrderCard({ order, onPress, expanded, detail }) {
         <View style={styles.expanded}>
 
           <OrderTimeline status={order.status} />
+          <OrderUpdates updates={detail.updates} />
 
           {detail.items?.length > 0 && (
             <View style={styles.itemsSection}>
@@ -308,6 +336,20 @@ const styles = StyleSheet.create({
   stepLabelActive: { color: Colors.text, fontWeight: '700' },
 
   sectionLabel: { fontSize: FontSize.xs, fontWeight: '700', color: Colors.textMuted, marginBottom: Spacing.sm, textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  updatesSection: { marginBottom: Spacing.lg },
+  updateRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.md },
+  updateDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primary,
+    marginTop: 6,
+  },
+  updateContent: { flex: 1 },
+  updateTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text, marginBottom: 2 },
+  updateMessage: { fontSize: FontSize.sm, color: Colors.textMuted, lineHeight: 18 },
+  updateMeta: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 4 },
 
   itemsSection: { marginBottom: Spacing.lg },
   detailItem: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.xs },
