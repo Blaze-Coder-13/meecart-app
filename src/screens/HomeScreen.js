@@ -232,7 +232,7 @@ export default function HomeScreen({ navigation }) {
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Notifications')}>
-            <Text style={styles.iconBtnEmoji}>🔔</Text>
+            <Text style={styles.iconBtnEmoji}>📢</Text>
             {hasUnreadNotifications ? <View style={styles.notifDot} /> : null}
           </TouchableOpacity>
           <TouchableOpacity style={styles.cartBtn} onPress={() => navigation.navigate('Cart')}>

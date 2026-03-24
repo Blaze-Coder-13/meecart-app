@@ -63,7 +63,7 @@ export default function NotificationsScreen({ navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Notifications</Text>
+        <Text style={styles.title}>Announcements</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -88,8 +88,8 @@ export default function NotificationsScreen({ navigation }) {
           )}
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={styles.emptyIcon}>No alerts</Text>
-              <Text style={styles.emptyTitle}>No notifications yet</Text>
+              <Text style={styles.emptyIcon}>No announcements</Text>
+              <Text style={styles.emptyTitle}>No announcements yet</Text>
               <Text style={styles.emptyText}>Broadcast updates from admin will appear here.</Text>
             </View>
           }
