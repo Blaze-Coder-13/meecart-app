@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, StyleSheet, Platform, Dimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../hooks/useAuth';
 import { Colors, FontSize } from '../utils/theme';
 import LoginScreen    from '../screens/LoginScreen';
@@ -36,6 +37,10 @@ function TabIcon({ emoji, label, focused, badge }) {
 
 function MainTabs() {
   const { cartCount } = useCart();
+  const insets = useSafeAreaInsets();
+  const bottomInset = Platform.OS === 'android' ? Math.max(insets.bottom, 14) : Math.max(insets.bottom, 20);
+  const tabBarHeight = 58 + bottomInset;
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -44,11 +49,10 @@ function MainTabs() {
           backgroundColor: Colors.white,
           borderTopWidth: 0.5,
           borderTopColor: Colors.border,
-          paddingBottom: Platform.OS === 'ios' ? 25 : 12,
-          height: Platform.OS === 'ios' ? 85 : 70,
-paddingBottom: Platform.OS === 'ios' ? 25 : 12,
-paddingTop: 6,
-paddingHorizontal: 4,
+          paddingBottom: bottomInset,
+          height: tabBarHeight,
+          paddingTop: 8,
+          paddingHorizontal: 4,
           elevation: 12,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -3 },
@@ -137,7 +141,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
   iconWrap: {
     position: 'relative',
