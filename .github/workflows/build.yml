@@ -5,6 +5,10 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -31,7 +35,15 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Cache generated Android project
+        id: android-cache
+        uses: actions/cache@v4
+        with:
+          path: android
+          key: android-prebuild-${{ runner.os }}-${{ hashFiles('app.json', 'package.json', 'package-lock.json', 'eas.json') }}
+
       - name: Generate Android files
+        if: steps.android-cache.outputs.cache-hit != 'true'
         run: npx expo prebuild --platform android --non-interactive
 
       - name: Make gradlew executable
