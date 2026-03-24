@@ -8,9 +8,12 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getCustomerNotifications } from '../api/client';
 import { Colors, FontSize, Spacing, Radius, Shadow } from '../utils/theme';
+
+const LAST_READ_NOTIFICATION_ID_KEY = 'meecart_last_read_notification_id';
 
 function formatDate(value) {
   try {
@@ -34,6 +37,9 @@ export default function NotificationsScreen({ navigation }) {
     try {
       const { data } = await getCustomerNotifications();
       setNotifications(data || []);
+      if (data?.[0]?.id) {
+        await AsyncStorage.setItem(LAST_READ_NOTIFICATION_ID_KEY, String(data[0].id));
+      }
     } catch (err) {
       console.error('Failed to load notifications:', err);
     } finally {

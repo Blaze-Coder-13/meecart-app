@@ -4,9 +4,11 @@ import {
   TextInput, RefreshControl, ActivityIndicator, Image,
   ScrollView, Dimensions,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import { getProducts, getCategories, getBanners, getSettings } from '../api/client';
+import { getProducts, getCategories, getBanners, getSettings, getCustomerNotifications } from '../api/client';
 const LOCAL_LOGO = require('../../assets/logo.png');
 import { useCart } from '../hooks/useCart';
 import { useAuth } from '../hooks/useAuth';
@@ -16,6 +18,7 @@ const { width } = Dimensions.get('window');
 const COLS = 3;
 const CAT_SIZE = (width - Spacing.lg * 2 - Spacing.sm * (COLS - 1)) / COLS;
 const PRODUCT_WIDTH = (width - Spacing.lg * 2 - Spacing.sm) / 2;
+const LAST_READ_NOTIFICATION_ID_KEY = 'meecart_last_read_notification_id';
 
 export default function HomeScreen({ navigation }) {
   const { addToCart, cartCount } = useCart();
@@ -30,8 +33,14 @@ export default function HomeScreen({ navigation }) {
   const [search, setSearch] = useState('');
   const [appLogo, setAppLogo] = useState('');
   const [appName, setAppName] = useState('Meecart');
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
 
   useEffect(() => { loadData(); }, []);
+  useFocusEffect(
+    useCallback(() => {
+      syncNotificationState();
+    }, [])
+  );
 
   async function loadData() {
     setLoading(true);
@@ -56,6 +65,20 @@ export default function HomeScreen({ navigation }) {
       setProducts(res.data || []);
     } catch {}
     setProductsLoading(false);
+  }
+
+  async function syncNotificationState() {
+    try {
+      const [{ data }, lastReadId] = await Promise.all([
+        getCustomerNotifications(),
+        AsyncStorage.getItem(LAST_READ_NOTIFICATION_ID_KEY),
+      ]);
+
+      const latestId = data?.[0]?.id;
+      setHasUnreadNotifications(Boolean(latestId) && String(latestId) !== String(lastReadId || ''));
+    } catch {
+      setHasUnreadNotifications(false);
+    }
   }
 
   function handleCategoryPress(category) {
@@ -209,7 +232,9 @@ export default function HomeScreen({ navigation }) {
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Notifications')}>
-            <Text style={styles.iconBtnText}>Bell</Text>
+            <Text style={styles.iconBtnEmoji}>🔔</Text>
+            <Text style={styles.iconBtnLabel}>Alerts</Text>
+            {hasUnreadNotifications ? <View style={styles.notifDot} /> : null}
           </TouchableOpacity>
           <TouchableOpacity style={styles.cartBtn} onPress={() => navigation.navigate('Cart')}>
             <Text style={styles.cartBtnText}>🛒</Text>
@@ -305,11 +330,27 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   iconBtn: {
     backgroundColor: Colors.primaryPale,
+    minWidth: 68,
+    height: 52,
     paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: Radius.full,
+    position: 'relative',
   },
-  iconBtnText: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: '800' },
+  iconBtnEmoji: { fontSize: 18 },
+  iconBtnLabel: { fontSize: 10, color: Colors.primary, fontWeight: '800', marginTop: 1 },
+  notifDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#ef4444',
+    borderWidth: 1.5,
+    borderColor: Colors.white,
+  },
   cartBtn: { position: 'relative', padding: Spacing.sm },
   cartBtnText: { fontSize: 26 },
   cartBadge: {
