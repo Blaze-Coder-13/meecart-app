@@ -1,0 +1,21 @@
+# OSX
+#
+.DS_Store
+
+# Android/IntelliJ
+#
+build/
+.idea
+.gradle
+.kotlin
+local.properties
+app/debug.keystore
+*.iml
+*.hprof
+.cxx/
+hs_err_pid*
+replay_pid*
+*.code-workspace
+
+# Bundle artifacts
+*.jsbundle
