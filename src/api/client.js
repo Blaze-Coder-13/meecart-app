@@ -1,19 +1,28 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const BASE_URL = 'https://meecart-backend-production.up.railway.app';
+import { API_BASE_URL } from '../config/api';
 
 async function request(method, path, body) {
   const token = await AsyncStorage.getItem('meecart_token');
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
-  const data = await res.json();
+  const raw = await res.text();
+  let data = null;
+
+  if (raw) {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = { message: raw };
+    }
+  }
+
   if (!res.ok) throw { response: { data, status: res.status } };
-  return { data };
+  return { data: data ?? {} };
 }
 
 // ── AUTH ──────────────────────────────────────────────
@@ -21,7 +30,7 @@ export const sendOTP = (phone, purpose = 'signup') =>
   request('POST', '/api/auth/send-otp', { phone, purpose });
 
 export const verifyOTP = (phone, code, purpose = 'signup') =>
-  request('POST', '/api/auth/verify-otp', { phone, code, purpose });
+  request('POST', '/api/auth/verify-otp', { phone, code, otp: code, purpose });
 
 export const signup = (phone, name, address, password, referral_code) =>
   request('POST', '/api/auth/signup', { phone, name, address, password, referral_code });

@@ -12,6 +12,7 @@ import { getProducts, getCategories, getBanners, getSettings, getCustomerAnnounc
 const LOCAL_LOGO = require('../../assets/logo.png');
 import { useCart } from '../hooks/useCart';
 import { useAuth } from '../hooks/useAuth';
+import { filterAnnouncementsForUser } from '../utils/announcements';
 import { Colors, FontSize, Spacing, Radius, Shadow } from '../utils/theme';
 
 const { width } = Dimensions.get('window');
@@ -31,6 +32,8 @@ export default function HomeScreen({ navigation }) {
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [categoriesLoaded, setCategoriesLoaded] = useState(false);
   const [productsLoading, setProductsLoading] = useState(false);
+  const [homeSearchLoading, setHomeSearchLoading] = useState(false);
+  const [homeSearchResults, setHomeSearchResults] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [appLogo, setAppLogo] = useState('');
@@ -45,7 +48,7 @@ export default function HomeScreen({ navigation }) {
   useFocusEffect(
     useCallback(() => {
       syncNotificationState();
-    }, [])
+    }, [user])
   );
   useFocusEffect(
     useCallback(() => {
@@ -115,6 +118,40 @@ export default function HomeScreen({ navigation }) {
     setProductsLoading(false);
   }
 
+  useEffect(() => {
+    if (selectedCategory) return undefined;
+
+    const trimmedSearch = search.trim();
+    if (!trimmedSearch) {
+      setHomeSearchResults([]);
+      setHomeSearchLoading(false);
+      return undefined;
+    }
+
+    let active = true;
+    setHomeSearchLoading(true);
+    const timeoutId = setTimeout(async () => {
+      try {
+        const res = await getProducts();
+        if (!active) return;
+        const allProducts = Array.isArray(res.data) ? res.data : [];
+        const normalizedSearch = trimmedSearch.toLowerCase();
+        setHomeSearchResults(
+          allProducts.filter(product => product.name?.toLowerCase().includes(normalizedSearch))
+        );
+      } catch {
+        if (active) setHomeSearchResults([]);
+      } finally {
+        if (active) setHomeSearchLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timeoutId);
+    };
+  }, [search, selectedCategory]);
+
   async function syncNotificationState() {
     try {
       const [{ data }, lastReadId] = await Promise.all([
@@ -122,7 +159,8 @@ export default function HomeScreen({ navigation }) {
         AsyncStorage.getItem(LAST_READ_NOTIFICATION_ID_KEY),
       ]);
 
-      const latestId = data?.[0]?.id;
+      const visibleAnnouncements = await filterAnnouncementsForUser(data || [], user);
+      const latestId = visibleAnnouncements?.[0]?.id;
       setHasUnreadNotifications(Boolean(latestId) && String(latestId) !== String(lastReadId || ''));
     } catch {
       setHasUnreadNotifications(false);
@@ -192,6 +230,50 @@ export default function HomeScreen({ navigation }) {
       return <Image source={{ uri: p.image_url }} style={styles.productImg} resizeMode="cover" />;
     }
     return <Text style={styles.productEmoji}>{p.image_emoji || '🥦'}</Text>;
+  }
+
+  function renderProductCard(item) {
+    return (
+      <View style={styles.productCard}>
+        <View style={styles.productImageWrap}>
+          {renderProductImage(item)}
+        </View>
+        <View style={styles.productInfo}>
+          <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
+          <Text style={styles.productUnit}>{item.unit}</Text>
+          <View style={styles.productBottom}>
+            <Text style={styles.productPrice}>{`\u20B9${item.price}`}</Text>
+            {cartQtyByProductId[item.id] > 0 ? (
+              <View style={styles.inlineQtyCtrl}>
+                <TouchableOpacity
+                  style={styles.inlineQtyBtn}
+                  onPress={() => removeFromCart(item.id)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.inlineQtyBtnText}>-</Text>
+                </TouchableOpacity>
+                <Text style={styles.inlineQtyValue}>{cartQtyByProductId[item.id]}</Text>
+                <TouchableOpacity
+                  style={styles.inlineQtyBtn}
+                  onPress={() => handleAddToCart(item)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.inlineQtyBtnText}>+</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.addBtn}
+                onPress={() => handleAddToCart(item)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.addBtnText}>+</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </View>
+    );
   }
 
   const filteredProducts = search
@@ -347,8 +429,52 @@ export default function HomeScreen({ navigation }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
+        <View style={styles.homeSearchSection}>
+          <View style={styles.homeSearchWrap}>
+            <View style={styles.homeSearchIconWrap}>
+              <Text style={styles.homeSearchIcon}>🔍</Text>
+            </View>
+            <TextInput
+              style={styles.homeSearchInput}
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search vegetables, fruits..."
+              placeholderTextColor={Colors.textMuted}
+            />
+            {search.length > 0 ? (
+              <TouchableOpacity onPress={() => setSearch('')} style={styles.homeSearchClearBtn}>
+                <Text style={styles.homeSearchClearText}>✕</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
+
+        {search.trim() ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Matching Products</Text>
+            {homeSearchLoading ? (
+              <View style={styles.homeSearchState}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+              </View>
+            ) : homeSearchResults.length > 0 ? (
+              <View style={styles.homeSearchResultsGrid}>
+                {homeSearchResults.map(item => (
+                  <View key={item.id} style={styles.homeSearchResultCard}>
+                    {renderProductCard(item)}
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.homeSearchEmpty}>
+                <Text style={styles.homeSearchEmptyTitle}>No matching products</Text>
+                <Text style={styles.homeSearchEmptyText}>Try a simpler product name like tomato, onion, apple, or banana.</Text>
+              </View>
+            )}
+          </View>
+        ) : null}
+
         {/* Banners */}
-        {banners.length > 0 && (
+        {!search.trim() && banners.length > 0 && (
           <ScrollView
             ref={bannerScrollRef}
             horizontal
@@ -369,6 +495,7 @@ export default function HomeScreen({ navigation }) {
         )}
 
         {/* Categories Grid */}
+        {!search.trim() && (
         <View style={styles.section}>
           {/* Flash Deals Banner */}
           <TouchableOpacity
@@ -404,6 +531,7 @@ export default function HomeScreen({ navigation }) {
             </>
           ) : null}
         </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -462,8 +590,88 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
 
+  homeSearchSection: {
+    paddingHorizontal: Spacing.sm,
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.xs,
+  },
+  homeSearchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: '#dfe7dc',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    ...Shadow.md,
+  },
+  homeSearchIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.primaryPale,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+  },
+  homeSearchIcon: {
+    fontSize: 16,
+  },
+  homeSearchInput: {
+    flex: 1,
+    paddingVertical: Spacing.md,
+    fontSize: FontSize.sm,
+    color: Colors.text,
+  },
+  homeSearchClearBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.background,
+    marginLeft: Spacing.xs,
+  },
+  homeSearchClearText: {
+    color: Colors.textMuted,
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+  },
   section: { paddingHorizontal: Spacing.lg, marginTop: Spacing.lg },
   sectionTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text, marginBottom: Spacing.md },
+  homeSearchEmpty: {
+    marginTop: Spacing.md,
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.lg,
+  },
+  homeSearchEmptyTitle: {
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  homeSearchEmptyText: {
+    fontSize: FontSize.xs,
+    color: Colors.textMuted,
+    lineHeight: 18,
+  },
+  homeSearchState: {
+    paddingVertical: Spacing.xxxl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  homeSearchResultsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  homeSearchResultCard: {
+    width: PRODUCT_WIDTH,
+  },
 
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   catCard: {
@@ -557,3 +765,4 @@ const styles = StyleSheet.create({
   flashBannerSub: { fontSize: FontSize.xs, color: '#bf360c', marginTop: 2 },
   flashBannerArrow: { fontSize: FontSize.lg, color: '#e65100', fontWeight: '700' },
 });
+

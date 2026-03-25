@@ -8,9 +8,24 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { sendOTP, verifyOTP, signup, login, resetPassword, getSettings, validateReferralCode } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
+import { markAnnouncementsVisibleFromNow } from '../utils/announcements';
 import { Colors, FontSize, Spacing, Radius } from '../utils/theme';
 
 const LOCAL_LOGO = require('../../assets/logo.png');
+
+function getApiErrorMessage(err, fallback) {
+  return (
+    err?.response?.data?.error ||
+    err?.response?.data?.message ||
+    err?.message ||
+    fallback
+  );
+}
+
+function isNetworkFailure(err) {
+  const message = getApiErrorMessage(err, '').toLowerCase();
+  return message.includes('network request failed') || message.includes('network error');
+}
 
 function AppLogo({ size = 60 }) {
   const [logo, setLogo] = useState('');
@@ -151,9 +166,29 @@ export default function LoginScreen() {
     setOtpCode('');
     setPassword('');
     setConfirmPassword('');
+    setReferralCode('');
+    setReferralStatus(null);
     setScreen('login');
     if (nextPhone) setPhone(nextPhone);
     setError(message || '');
+  }
+
+  async function finishSignupLogin(signupData, fallbackAddress) {
+    if (signupData?.token && signupData?.user) {
+      await authLogin(signupData.token, { ...signupData.user, address: fallbackAddress.trim() });
+      return true;
+    }
+
+    try {
+      const { data } = await login(phone, password);
+      if (data?.token && data?.user) {
+        await authLogin(data.token, data.user);
+        return true;
+      }
+    } catch {}
+
+    goToLoginWithPhone(phone, 'Account created successfully. Please login.');
+    return false;
   }
 
   async function handleLogin() {
@@ -166,7 +201,7 @@ export default function LoginScreen() {
       await authLogin(data.token, data.user);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
-      setError(err.response?.data?.error || 'Login failed. Try again.');
+      setError(getApiErrorMessage(err, 'Login failed. Try again.'));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally { setLoading(false); }
   }
@@ -180,9 +215,12 @@ export default function LoginScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       goTo('register_otp');
     } catch (err) {
-      const message = err.response?.data?.error || 'Failed to send OTP.';
+      const message = getApiErrorMessage(err, 'Failed to send OTP.');
       if (/already registered|please login/i.test(message)) {
         goToLoginWithPhone(phone, 'This number is already registered. Please login.');
+      } else if (isNetworkFailure(err)) {
+        goTo('register_otp');
+        setError('Network was unstable. If you received the OTP, enter it now; otherwise tap Resend OTP.');
       } else {
         setError(message);
       }
@@ -198,7 +236,11 @@ export default function LoginScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       goTo('register_details');
     } catch (err) {
-      setError(err.response?.data?.error || 'Invalid or expired OTP.');
+      if (isNetworkFailure(err)) {
+        setError('Network was unstable. Please tap Verify OTP once again with the same code.');
+      } else {
+        setError(getApiErrorMessage(err, 'Invalid or expired OTP.'));
+      }
     } finally { setLoading(false); }
   }
 
@@ -213,10 +255,23 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const { data } = await signup(phone, name, address, password, referralCode || undefined);
-      await authLogin(data.token, { ...data.user, address: address.trim() });
+      await markAnnouncementsVisibleFromNow(phone);
+      await finishSignupLogin(data, address);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
-      setError(err.response?.data?.error || 'Signup failed. Try again.');
+      if (isNetworkFailure(err)) {
+        const recovered = await finishSignupLogin(null, address);
+        if (recovered) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          return;
+        }
+      }
+      const message = getApiErrorMessage(err, 'Signup failed. Try again.');
+      if (/already registered|please login/i.test(message)) {
+        goToLoginWithPhone(phone, 'This number is already registered. Please login.');
+      } else {
+        setError(message);
+      }
     } finally { setLoading(false); }
   }
 
@@ -229,7 +284,12 @@ export default function LoginScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       goTo('forgot_otp');
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to send OTP.');
+      if (isNetworkFailure(err)) {
+        goTo('forgot_otp');
+        setError('Network was unstable. If you received the OTP, enter it now; otherwise tap Send OTP again.');
+      } else {
+        setError(getApiErrorMessage(err, 'Failed to send OTP.'));
+      }
     } finally { setLoading(false); }
   }
 
@@ -242,7 +302,11 @@ export default function LoginScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       goTo('forgot_reset');
     } catch (err) {
-      setError(err.response?.data?.error || 'Invalid or expired OTP.');
+      if (isNetworkFailure(err)) {
+        setError('Network was unstable. Please tap Verify OTP once again with the same code.');
+      } else {
+        setError(getApiErrorMessage(err, 'Invalid or expired OTP.'));
+      }
     } finally { setLoading(false); }
   }
 
@@ -258,7 +322,7 @@ export default function LoginScreen() {
         { text: 'OK', onPress: () => { resetState(); goTo('login'); } }
       ]);
     } catch (err) {
-      setError(err.response?.data?.error || 'Reset failed. Try again.');
+      setError(getApiErrorMessage(err, 'Reset failed. Try again.'));
     } finally { setLoading(false); }
   }
 
@@ -369,6 +433,9 @@ export default function LoginScreen() {
           {/* REGISTER DETAILS */}
           {screen === 'register_details' && (
             <View style={[s.card, { marginBottom: 40 }]}>
+              <TouchableOpacity onPress={() => { resetState(); goTo('login'); }} style={s.backRow}>
+                <Text style={s.backText}>Back to Login</Text>
+              </TouchableOpacity>
               <Text style={s.cardTitle}>Complete Profile</Text>
               <Text style={s.cardSub}>+91 {phone}</Text>
               <View style={s.fieldWrap}>
@@ -571,3 +638,4 @@ const s = StyleSheet.create({
   referralHintTextValid: { color: '#2d6a4f' },
   referralHintTextInvalid: { color: '#991b1b' },
 });
+

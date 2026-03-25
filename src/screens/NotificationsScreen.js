@@ -12,6 +12,8 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getCustomerAnnouncements } from '../api/client';
+import { useAuth } from '../hooks/useAuth';
+import { filterAnnouncementsForUser } from '../utils/announcements';
 import { Colors, FontSize, Spacing, Radius, Shadow } from '../utils/theme';
 
 const LAST_READ_NOTIFICATION_ID_KEY = 'meecart_last_read_notification_id';
@@ -30,6 +32,7 @@ function formatDate(value) {
 }
 
 export default function NotificationsScreen({ navigation }) {
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -37,9 +40,10 @@ export default function NotificationsScreen({ navigation }) {
   const loadNotifications = useCallback(async () => {
     try {
       const { data } = await getCustomerAnnouncements();
-      setNotifications(data || []);
-      if (data?.[0]?.id) {
-        await AsyncStorage.setItem(LAST_READ_NOTIFICATION_ID_KEY, String(data[0].id));
+      const visibleAnnouncements = await filterAnnouncementsForUser(data || [], user);
+      setNotifications(visibleAnnouncements);
+      if (visibleAnnouncements[0]?.id) {
+        await AsyncStorage.setItem(LAST_READ_NOTIFICATION_ID_KEY, String(visibleAnnouncements[0].id));
       }
     } catch (err) {
       console.error('Failed to load notifications:', err);
@@ -47,7 +51,7 @@ export default function NotificationsScreen({ navigation }) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     loadNotifications();
