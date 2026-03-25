@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   TextInput, RefreshControl, ActivityIndicator, Image,
-  ScrollView, Dimensions,
+  ScrollView, Dimensions, BackHandler,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,43 +19,91 @@ const COLS = 3;
 const CAT_SIZE = (width - Spacing.lg * 2 - Spacing.sm * (COLS - 1)) / COLS;
 const PRODUCT_WIDTH = (width - Spacing.lg * 2 - Spacing.sm) / 2;
 const LAST_READ_NOTIFICATION_ID_KEY = 'meecart_last_read_notification_id';
+const CACHED_CATEGORIES_KEY = 'meecart_cached_categories';
 
 export default function HomeScreen({ navigation }) {
-  const { addToCart, cartCount } = useCart();
+  const { addToCart, removeFromCart, cart, cartCount } = useCart();
   const { user } = useAuth();
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [banners, setBanners] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
   const [productsLoading, setProductsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [appLogo, setAppLogo] = useState('');
   const [appName, setAppName] = useState('Meecart');
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+  const bannerScrollRef = useRef(null);
+  const bannerIndexRef = useRef(0);
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadInitialData();
+  }, []);
   useFocusEffect(
     useCallback(() => {
       syncNotificationState();
     }, [])
   );
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (!selectedCategory) return false;
+        handleBack();
+        return true;
+      });
 
-  async function loadData() {
-    setLoading(true);
+      return () => subscription.remove();
+    }, [selectedCategory])
+  );
+
+  async function loadInitialData() {
+    await Promise.all([
+      loadHomeData(),
+      loadCachedCategories(),
+    ]);
+    loadCategories();
+  }
+
+  async function loadHomeData() {
     try {
-      const [catRes, bannerRes, settingsRes] = await Promise.all([
-        getCategories(),
+      const [bannerRes, settingsRes] = await Promise.all([
         getBanners(),
         getSettings(),
       ]);
-      setCategories(catRes.data || []);
       setBanners((bannerRes.data || []).filter(b => b.image_url && b.active));
       if (settingsRes.data.app_logo_url) setAppLogo(settingsRes.data.app_logo_url);
       if (settingsRes.data.app_name) setAppName(settingsRes.data.app_name);
     } catch {}
-    setLoading(false);
+  }
+
+  async function loadCachedCategories() {
+    try {
+      const cachedValue = await AsyncStorage.getItem(CACHED_CATEGORIES_KEY);
+      if (!cachedValue) return;
+
+      const cachedCategories = JSON.parse(cachedValue);
+      if (Array.isArray(cachedCategories) && cachedCategories.length > 0) {
+        setCategories(cachedCategories);
+        setCategoriesLoaded(true);
+      }
+    } catch {}
+  }
+
+  async function loadCategories() {
+    if (categoriesLoading) return;
+
+    setCategoriesLoading(true);
+    try {
+      const catRes = await getCategories();
+      const nextCategories = Array.isArray(catRes.data) ? catRes.data : [];
+      setCategories(nextCategories);
+      setCategoriesLoaded(nextCategories.length > 0);
+      await AsyncStorage.setItem(CACHED_CATEGORIES_KEY, JSON.stringify(nextCategories));
+    } catch {}
+    setCategoriesLoading(false);
   }
 
   async function loadProducts(categoryId) {
@@ -96,7 +144,10 @@ export default function HomeScreen({ navigation }) {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadData();
+    await Promise.all([
+      loadHomeData(),
+      loadCategories(),
+    ]);
     setRefreshing(false);
   }, []);
 
@@ -112,6 +163,22 @@ export default function HomeScreen({ navigation }) {
     });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
+
+  useEffect(() => {
+    if (banners.length <= 1) return undefined;
+
+    bannerIndexRef.current = 0;
+    const bannerWidth = width - Spacing.lg * 2 + Spacing.sm;
+    const interval = setInterval(() => {
+      bannerIndexRef.current = (bannerIndexRef.current + 1) % banners.length;
+      bannerScrollRef.current?.scrollTo({
+        x: bannerIndexRef.current * bannerWidth,
+        animated: true,
+      });
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [banners]);
 
   function renderCategoryIcon(c) {
     if (c.image_url) {
@@ -130,6 +197,15 @@ export default function HomeScreen({ navigation }) {
   const filteredProducts = search
     ? products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
     : products;
+  const cartQtyByProductId = useMemo(() => {
+    const next = {};
+    Object.values(cart).forEach(item => {
+      if (!item.is_flash_deal && item.product_id) {
+        next[item.product_id] = item.qty;
+      }
+    });
+    return next;
+  }, [cart]);
 
   const greeting = user?.name
     ? `Hey ${user.name.split(' ')[0]}! 👋`
@@ -198,13 +274,33 @@ export default function HomeScreen({ navigation }) {
                   <Text style={styles.productUnit}>{item.unit}</Text>
                   <View style={styles.productBottom}>
                     <Text style={styles.productPrice}>₹{item.price}</Text>
-                    <TouchableOpacity
-                      style={styles.addBtn}
-                      onPress={() => handleAddToCart(item)}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.addBtnText}>+</Text>
-                    </TouchableOpacity>
+                    {cartQtyByProductId[item.id] > 0 ? (
+                      <View style={styles.inlineQtyCtrl}>
+                        <TouchableOpacity
+                          style={styles.inlineQtyBtn}
+                          onPress={() => removeFromCart(item.id)}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={styles.inlineQtyBtnText}>-</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.inlineQtyValue}>{cartQtyByProductId[item.id]}</Text>
+                        <TouchableOpacity
+                          style={styles.inlineQtyBtn}
+                          onPress={() => handleAddToCart(item)}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={styles.inlineQtyBtnText}>+</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.addBtn}
+                        onPress={() => handleAddToCart(item)}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.addBtnText}>+</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               </View>
@@ -254,6 +350,7 @@ export default function HomeScreen({ navigation }) {
         {/* Banners */}
         {banners.length > 0 && (
           <ScrollView
+            ref={bannerScrollRef}
             horizontal
             showsHorizontalScrollIndicator={false}
             pagingEnabled
@@ -286,10 +383,9 @@ export default function HomeScreen({ navigation }) {
             </View>
             <Text style={styles.flashBannerArrow}>→</Text>
           </TouchableOpacity>
-          <Text style={styles.sectionTitle}>Shop by Category</Text>
-          {loading ? (
-            <ActivityIndicator color={Colors.primary} style={{ marginVertical: 30 }} />
-          ) : (
+          {categoriesLoaded && categories.length > 0 ? (
+            <>
+              <Text style={styles.sectionTitle}>Shop by Category</Text>
             <View style={styles.catGrid}>
               {categories.map(c => (
                 <TouchableOpacity
@@ -305,7 +401,8 @@ export default function HomeScreen({ navigation }) {
                 </TouchableOpacity>
               ))}
             </View>
-          )}
+            </>
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -419,6 +516,32 @@ const styles = StyleSheet.create({
     borderRadius: 14, alignItems: 'center', justifyContent: 'center',
   },
   addBtnText: { color: Colors.white, fontSize: 20, fontWeight: '700', lineHeight: 26 },
+  inlineQtyCtrl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+  },
+  inlineQtyBtn: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inlineQtyBtnText: {
+    color: Colors.white,
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  inlineQtyValue: {
+    minWidth: 26,
+    color: Colors.white,
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
 
   emptyIcon: { fontSize: 48, marginBottom: Spacing.md },
   emptyText: { fontSize: FontSize.sm, color: Colors.textMuted },

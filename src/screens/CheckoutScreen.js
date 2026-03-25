@@ -3,9 +3,9 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { placeOrder, getSettings, applyPromoCode, getMe, getReferralStats, getMyOrders } from '../api/client';
+import { placeOrder, getSettings, applyPromoCode, getMe, getReferralStats } from '../api/client';
 import { CommonActions } from '@react-navigation/native';
 import { useCart } from '../hooks/useCart';
 import { useAuth } from '../hooks/useAuth';
@@ -13,7 +13,8 @@ import { Colors, FontSize, Spacing, Radius, Shadow } from '../utils/theme';
 
 export default function CheckoutScreen({ navigation }) {
   const { user } = useAuth();
-  const { cartItems, cartTotal, clearCart } = useCart();
+  const { cartItems, cartTotal, clearCart, addToCart, removeFromCart } = useCart();
+  const insets = useSafeAreaInsets();
 
   const [savedAddress, setSavedAddress] = useState(user?.address || '');
   const [addressMode, setAddressMode] = useState(user?.address ? 'saved' : 'new');
@@ -23,6 +24,7 @@ export default function CheckoutScreen({ navigation }) {
   const [promoApplied, setPromoApplied] = useState(null);
   const [promoLoading, setPromoLoading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [referralStats, setReferralStats] = useState(null);
   const [settings, setSettings] = useState({
     free_delivery_above: 150,
     delivery_charges: 30,
@@ -66,10 +68,11 @@ export default function CheckoutScreen({ navigation }) {
   async function loadReferralDiscount() {
     try {
       const { data } = await getReferralStats();
-      // Only apply referral discount if this is user's first order
-      const ordersRes = await getMyOrders();
-      if (ordersRes.data.length === 0 && data.referred_by) {
+      setReferralStats(data);
+      if (data.referred_by && !data.referred_discount_claimed) {
         setReferralDiscount(data.discount_per_referral || 0);
+      } else {
+        setReferralDiscount(0);
       }
     } catch {}
   }
@@ -98,6 +101,35 @@ export default function CheckoutScreen({ navigation }) {
     }
   }
 
+  async function applyReferralReward() {
+    if (!referralStats?.bonus_code) return;
+    setPromoCode(referralStats.bonus_code);
+    setPromoLoading(true);
+    try {
+      const { data } = await applyPromoCode(referralStats.bonus_code, cartTotal);
+      setPromoApplied(data);
+      Alert.alert('Referral Reward Applied', `Discount of ₹${data.discount} applied!`);
+    } catch (err) {
+      Alert.alert('Unable to Apply Reward', err.response?.data?.error || 'Referral reward could not be applied.');
+      setPromoApplied(null);
+      setPromoCode('');
+    } finally {
+      setPromoLoading(false);
+    }
+  }
+
+  function handleIncreaseQty(item) {
+    if (item.is_flash_deal) {
+      Alert.alert('Flash Deal', 'Flash deals can only be claimed once per order.');
+      return;
+    }
+    addToCart({ id: item.product_id, product_id: item.product_id, ...item });
+  }
+
+  function handleDecreaseQty(item) {
+    removeFromCart(item.product_id);
+  }
+
   async function handlePlaceOrder() {
     if (selectedAddress.trim().length < 10) {
       Alert.alert('Address Required', 'Please enter your complete delivery address.');
@@ -123,8 +155,23 @@ export default function CheckoutScreen({ navigation }) {
   async function confirmOrder() {
     setLoading(true);
     try {
-      const items = cartItems.map(i => ({ product_id: i.product_id, quantity: i.qty }));
-      await placeOrder(items, selectedAddress.trim(), notes.trim() || undefined, promoApplied?.code);
+      const items = cartItems.map(i => ({
+        product_id: i.product_id,
+        quantity: i.qty,
+        is_flash_deal: Boolean(i.is_flash_deal),
+        unit: i.unit,
+      }));
+      const { data } = await placeOrder(
+        items,
+        selectedAddress.trim(),
+        notes.trim() || undefined,
+        promoApplied?.code,
+        referralDiscount > 0,
+        discount,
+        finalTotal
+      );
+      const placedOrderTotal = Number(data?.order?.total ?? finalTotal);
+      const placedOrderDiscount = Number(data?.order?.discount ?? discount);
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       clearCart();
@@ -186,7 +233,27 @@ export default function CheckoutScreen({ navigation }) {
                   ? <Image source={{ uri: i.image_url }} style={styles.orderImage} />
                   : <Text style={styles.orderEmoji}>{i.emoji}</Text>
                 }
-                <Text style={styles.orderName}>{i.name} × {i.qty}</Text>
+                <View style={styles.orderMeta}>
+                  <Text style={styles.orderName}>{i.name}</Text>
+                  <Text style={styles.orderQtyText}>{i.qty} x {i.unit}</Text>
+                </View>
+                <View style={styles.checkoutQtyCtrl}>
+                  <TouchableOpacity
+                    style={styles.checkoutQtyBtn}
+                    onPress={() => handleDecreaseQty(i)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.checkoutQtyBtnText}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.checkoutQtyValue}>{i.qty}</Text>
+                  <TouchableOpacity
+                    style={styles.checkoutQtyBtn}
+                    onPress={() => handleIncreaseQty(i)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.checkoutQtyBtnText}>+</Text>
+                  </TouchableOpacity>
+                </View>
                 <Text style={styles.orderPrice}>₹{i.qty * i.price}</Text>
               </View>
             ))}
@@ -229,6 +296,13 @@ export default function CheckoutScreen({ navigation }) {
           {/* Promo Code */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Promo Code (optional)</Text>
+            {referralStats?.bonus_code && !promoApplied && (
+              <TouchableOpacity style={styles.referralRewardBtn} onPress={applyReferralReward} activeOpacity={0.85}>
+                <Text style={styles.referralRewardBtnText}>
+                  Use referral reward code {referralStats.bonus_code}
+                </Text>
+              </TouchableOpacity>
+            )}
             <View style={styles.promoRow}>
               <TextInput
                 style={styles.promoInput}
@@ -329,7 +403,7 @@ export default function CheckoutScreen({ navigation }) {
 
         </ScrollView>
 
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Spacing.lg) }]}>
           <View style={styles.footRow}>
             <Text style={styles.footLabel}>Pay on delivery</Text>
             <Text style={styles.footAmt}>₹{finalTotal}</Text>
@@ -376,9 +450,37 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text, marginBottom: Spacing.md },
   orderRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm },
   orderEmoji: { fontSize: 18 },
-  orderName: { flex: 1, fontSize: FontSize.sm, color: Colors.text },
+  orderMeta: { flex: 1 },
+  orderName: { fontSize: FontSize.sm, color: Colors.text, fontWeight: '600' },
+  orderQtyText: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
   orderPrice: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
   orderImage: { width: 32, height: 32, borderRadius: 6 },
+  checkoutQtyCtrl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primaryPale,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+  },
+  checkoutQtyBtn: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkoutQtyBtnText: {
+    color: Colors.primary,
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  checkoutQtyValue: {
+    minWidth: 24,
+    textAlign: 'center',
+    color: Colors.primary,
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+  },
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.sm },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing.xs },
   summaryLabel: { fontSize: FontSize.sm, color: Colors.textMuted },
@@ -408,6 +510,20 @@ const styles = StyleSheet.create({
   },
   promoBtnText: { color: Colors.white, fontSize: FontSize.sm, fontWeight: '700' },
   promoSuccess: { color: Colors.primary, fontSize: FontSize.xs, fontWeight: '600', marginTop: Spacing.sm },
+  referralRewardBtn: {
+    backgroundColor: Colors.primaryPale,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.primaryLight,
+  },
+  referralRewardBtnText: {
+    color: Colors.primary,
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
   addressOption: {
     borderWidth: 1.5, borderColor: Colors.border,
     borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.sm,

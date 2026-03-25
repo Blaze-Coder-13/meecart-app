@@ -3,6 +3,8 @@ import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   RefreshControl, ActivityIndicator, Image,
 } from 'react-native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getMyOrders, getMyOrder } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
@@ -173,8 +175,8 @@ function OrderCard({ order, onPress, expanded, detail }) {
   });
 
   const subtotal = detail?.subtotal || order.total;
-  const deliveryCharges = detail?.delivery_charges || 0;
-  const discount = detail?.discount || 0;
+  const deliveryCharges = detail?.delivery_charges ?? order.delivery_charges ?? 0;
+  const discount = detail?.discount ?? order.discount ?? 0;
   const displayUpdates = buildOrderUpdates(order, detail);
 
   return (
@@ -185,6 +187,9 @@ function OrderCard({ order, onPress, expanded, detail }) {
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={styles.orderTotal}>₹{order.total}</Text>
+          {discount > 0 && (
+            <Text style={styles.orderDiscount}>Saved ₹{discount}</Text>
+          )}
           <Text style={styles.codLabel}>💵 Cash on Delivery</Text>
         </View>
       </View>
@@ -206,7 +211,7 @@ function OrderCard({ order, onPress, expanded, detail }) {
                     ? <Image source={{ uri: i.image_url }} style={styles.detailImage} />
                     : <Text style={styles.detailEmoji}>{i.image_emoji}</Text>
                   }
-                  <Text style={styles.detailName}>{i.name} × {i.quantity} {i.unit}</Text>
+                  <Text style={styles.detailName}>{i.name} ({i.quantity} x {i.unit})</Text>
                   <Text style={styles.detailPrice}>₹{(i.price * i.quantity).toFixed(0)}</Text>
                 </View>
               ))}
@@ -254,6 +259,7 @@ function OrderCard({ order, onPress, expanded, detail }) {
 
 export default function OrdersScreen({ navigation }) {
   const { user } = useAuth();
+  const tabBarHeight = useBottomTabBarHeight();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -261,6 +267,14 @@ export default function OrdersScreen({ navigation }) {
   const [orderDetails, setOrderDetails] = useState({});
 
   useEffect(() => { loadOrders(); }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      setExpandedId(null);
+      setOrderDetails({});
+      loadOrders();
+    }, [user])
+  );
 
   async function loadOrders() {
     if (!user) { setLoading(false); return; }
@@ -335,7 +349,7 @@ export default function OrdersScreen({ navigation }) {
               onPress={() => toggleOrder(item.id)}
             />
           )}
-          contentContainerStyle={{ padding: Spacing.lg, gap: Spacing.md }}
+          contentContainerStyle={{ padding: Spacing.lg, gap: Spacing.md, paddingBottom: tabBarHeight + Spacing.xl }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
           }
@@ -367,6 +381,7 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing.md },
   orderDate: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
   orderTotal: { fontSize: FontSize.lg, fontWeight: '800', color: Colors.primary },
+  orderDiscount: { fontSize: FontSize.xs, color: Colors.success, marginTop: 2, fontWeight: '700' },
   codLabel: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
 
   badge: {
