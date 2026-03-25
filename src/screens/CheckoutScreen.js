@@ -10,6 +10,20 @@ import { useCart } from '../hooks/useCart';
 import { useAuth } from '../hooks/useAuth';
 import { Colors, FontSize, Spacing, Radius, Shadow } from '../utils/theme';
 
+function getApiErrorMessage(err, fallback) {
+  return (
+    err?.response?.data?.error ||
+    err?.response?.data?.message ||
+    err?.message ||
+    fallback
+  );
+}
+
+function isNetworkFailure(err) {
+  const message = getApiErrorMessage(err, '').toLowerCase();
+  return message.includes('network request failed') || message.includes('network error');
+}
+
 export default function CheckoutScreen({ navigation }) {
   const { user } = useAuth();
   const { cartItems, cartTotal, clearCart, addToCart, removeFromCart } = useCart();
@@ -83,6 +97,43 @@ export default function CheckoutScreen({ navigation }) {
   const deliveryCharges = cartTotal >= FREE_DELIVERY_ABOVE ? 0 : DELIVERY_CHARGE;
   const finalTotal = cartTotal + deliveryCharges - discount;
   const selectedAddress = addressMode === 'saved' ? savedAddress : newAddress;
+
+  function handleOrderSuccess() {
+    clearCart();
+
+    Alert.alert(
+      'ðŸŽ‰ Order Placed!',
+      `Your order is confirmed!\nTotal: â‚¹${finalTotal}\n${deliveryCharges > 0 ? `Includes â‚¹${DELIVERY_CHARGE} delivery charge.` : 'ðŸŽ‰ Free delivery!'}\nPay on delivery.`,
+      [{ text: 'View Orders', onPress: () => {
+        navigation.dispatch(
+          require('@react-navigation/native').CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Main', state: { index: 2, routes: [{ name: 'Home' }, { name: 'Cart' }, { name: 'Orders' }] } }],
+          })
+        );
+      }}]
+    );
+  }
+
+  async function recoverRecentOrder() {
+    try {
+      const { getMyOrders } = require('../api/client');
+      const { data } = await getMyOrders();
+      const latestOrder = Array.isArray(data) ? data[0] : null;
+      if (!latestOrder) return false;
+
+      const orderCreatedAt = latestOrder.created_at ? new Date(latestOrder.created_at) : null;
+      const isFresh = orderCreatedAt && !Number.isNaN(orderCreatedAt.getTime())
+        ? Date.now() - orderCreatedAt.getTime() < 2 * 60 * 1000
+        : false;
+      const addressMatches = String(latestOrder.address || '').trim() === selectedAddress.trim();
+      const totalMatches = Math.abs(Number(latestOrder.total || 0) - Number(finalTotal || 0)) <= 2;
+
+      return Boolean(isFresh && addressMatches && totalMatches);
+    } catch {
+      return false;
+    }
+  }
 
   async function applyPromo() {
     if (!promoCode.trim()) return;
@@ -186,7 +237,15 @@ export default function CheckoutScreen({ navigation }) {
         }}]
       );
     } catch (err) {
-      Alert.alert('Order Failed', err.response?.data?.error || 'Something went wrong. Try again.');
+      if (isNetworkFailure(err)) {
+        const recovered = await recoverRecentOrder();
+        if (recovered) {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          handleOrderSuccess();
+          return;
+        }
+      }
+      Alert.alert('Order Failed', getApiErrorMessage(err, 'Something went wrong. Try again.'));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setLoading(false);
