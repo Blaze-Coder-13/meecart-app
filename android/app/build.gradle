@@ -10,13 +10,14 @@ def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
  */
 react {
     entryFile = file(["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir).text.trim())
-    reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+    def resolvedReactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+    reactNativeDir = resolvedReactNativeDir
     def hermesCompilerPackage = ["node", "--print", "require.resolve('hermes-compiler/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir)
     hermesCompilerPackage.waitFor()
     def hermesCompilerPath = hermesCompilerPackage.exitValue() == 0 ? hermesCompilerPackage.text.trim() : ""
     hermesCommand = hermesCompilerPath
         ? new File(hermesCompilerPath).getParentFile().getAbsolutePath() + "/hermesc/%OS-BIN%/hermesc"
-        : new File(reactNativeDir, "sdks/hermesc/%OS-BIN%/hermesc").getAbsolutePath()
+        : new File(resolvedReactNativeDir, "sdks/hermesc/%OS-BIN%/hermesc").getAbsolutePath()
     codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
 
     enableBundleCompression = (findProperty('android.enableBundleCompression') ?: false).toBoolean()
