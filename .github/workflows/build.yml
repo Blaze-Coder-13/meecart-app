@@ -54,8 +54,17 @@ jobs:
             ${{ runner.os }}-android-build-${{ hashFiles('package-lock.json', 'app.json', 'package.json', 'android/**') }}
             ${{ runner.os }}-android-build-
 
+      - name: Detect Android project
+        id: android_project
+        run: |
+          if [ -f android/gradlew ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Regenerate Android files
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.regenerate_android == 'true' }}
+        if: ${{ steps.android_project.outputs.exists != 'true' || (github.event_name == 'workflow_dispatch' && inputs.regenerate_android == 'true') }}
         run: |
           rm -rf android
           npx expo prebuild --platform android --clean --non-interactive
