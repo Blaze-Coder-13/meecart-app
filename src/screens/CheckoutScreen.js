@@ -102,8 +102,8 @@ export default function CheckoutScreen({ navigation }) {
     clearCart();
 
     Alert.alert(
-      'ðŸŽ‰ Order Placed!',
-      `Your order is confirmed!\nTotal: â‚¹${finalTotal}\n${deliveryCharges > 0 ? `Includes â‚¹${DELIVERY_CHARGE} delivery charge.` : 'ðŸŽ‰ Free delivery!'}\nPay on delivery.`,
+      'Order Placed!',
+      `Your order is confirmed!\nTotal: \u20B9${finalTotal}\n${deliveryCharges > 0 ? `Includes \u20B9${DELIVERY_CHARGE} delivery charge.` : 'Free delivery!'}\nPay on delivery.`,
       [{ text: 'View Orders', onPress: () => {
         navigation.dispatch(
           require('@react-navigation/native').CommonActions.reset({
