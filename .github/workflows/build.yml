@@ -75,7 +75,7 @@ jobs:
       - name: Build release APK
         run: |
           cd android
-          ./gradlew assembleRelease --build-cache --configuration-cache --parallel --max-workers=3
+          ./gradlew assembleRelease --build-cache --parallel --max-workers=3
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
