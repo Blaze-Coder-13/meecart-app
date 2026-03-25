@@ -6,7 +6,6 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { placeOrder, getSettings, applyPromoCode, getMe, getReferralStats } from '../api/client';
-import { CommonActions } from '@react-navigation/native';
 import { useCart } from '../hooks/useCart';
 import { useAuth } from '../hooks/useAuth';
 import { Colors, FontSize, Spacing, Radius, Shadow } from '../utils/theme';
@@ -170,8 +169,6 @@ export default function CheckoutScreen({ navigation }) {
         discount,
         finalTotal
       );
-      const placedOrderTotal = Number(data?.order?.total ?? finalTotal);
-      const placedOrderDiscount = Number(data?.order?.discount ?? discount);
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       clearCart();
