@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   TextInput, Alert, ScrollView, ActivityIndicator,
-  Clipboard,
 } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,7 +17,6 @@ export default function ProfileScreen({ navigation }) {
   const [address, setAddress] = useState(user?.address || '');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [showReferralDetails, setShowReferralDetails] = useState(false);
   const [referralStats, setReferralStats] = useState(null);
   const [appSettings, setAppSettings] = useState({
     app_contact_email: 'support@meecart.com',
@@ -85,12 +83,6 @@ export default function ProfileScreen({ navigation }) {
     ]);
   }
 
-  function copyReferralCode() {
-    if (!profileUser?.referral_code) return;
-    Clipboard.setString(profileUser.referral_code);
-    Alert.alert('Copied!', `Referral code ${profileUser.referral_code} copied to clipboard.`);
-  }
-
   if (!user) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
@@ -134,101 +126,29 @@ export default function ProfileScreen({ navigation }) {
         </View>
 
         {displayUser?.referral_code && (
-          <View style={styles.section}>
-            <TouchableOpacity
-              style={styles.referralToggle}
-              onPress={() => setShowReferralDetails(prev => !prev)}
-              activeOpacity={0.85}
-            >
-              <View style={styles.referralToggleTextWrap}>
-                <Text style={styles.sectionTitle}>Referral Program</Text>
-                <Text style={styles.referralToggleSub}>
-                  {showReferralDetails ? 'Hide referral details' : 'View your code, rewards and referral status'}
-                </Text>
-              </View>
-              <Text style={styles.referralToggleIcon}>{showReferralDetails ? '▲' : '▼'}</Text>
-            </TouchableOpacity>
-
-            {showReferralDetails && (
-              <View>
-                <Text style={styles.referralSubTitle}>Your Referral Code</Text>
-                <TouchableOpacity style={styles.referralBox} onPress={copyReferralCode} activeOpacity={0.8}>
-                  <Text style={styles.referralCode}>{displayUser.referral_code}</Text>
-                  <Text style={styles.referralCopy}>Tap to copy</Text>
-                </TouchableOpacity>
-                <Text style={styles.referralHint}>
-                  Share your code. Friends get ₹{appSettings.referral_discount || 30} off, and your reward unlocks after their order is delivered.
-                </Text>
-
-                {referralStats && (
-                  <View style={styles.referralStats}>
-                    <View style={styles.statBox}>
-                      <Text style={styles.statNum}>{referralStats.referred_count}</Text>
-                      <Text style={styles.statLbl}>Friends Referred</Text>
-                    </View>
-                    <View style={styles.statBox}>
-                      <Text style={styles.statNum}>₹{referralStats.total_earned}</Text>
-                      <Text style={styles.statLbl}>Total Earned</Text>
-                    </View>
-                    <View style={styles.statBox}>
-                      <Text style={styles.statNum}>₹{referralStats.discount_per_referral}</Text>
-                      <Text style={styles.statLbl}>Per Referral</Text>
-                    </View>
-                  </View>
-                )}
-
-                {referralStats?.referred_by && (
-                  <View style={[styles.referralStatusBox, referralStats.referred_discount_claimed ? styles.referralStatusClaimed : styles.referralStatusPending]}>
-                    <Text style={styles.referralStatusTitle}>Your Referral Discount</Text>
-                    <Text style={styles.referralStatusText}>
-                      {referralStats.referred_discount_claimed
-                        ? `Claimed on an earlier order. You received ₹${referralStats.discount_per_referral} off.`
-                        : `Available. ₹${referralStats.discount_per_referral} will be applied on your next eligible checkout until used once.`}
-                    </Text>
-                  </View>
-                )}
-
-                {referralStats && (referralStats.available_referral_rewards > 0 || referralStats.pending_referral_rewards > 0 || referralStats.used_referral_rewards > 0) && (
-                  <View
-                    style={[
-                      styles.referralStatusBox,
-                      referralStats.available_referral_rewards > 0
-                        ? styles.referralStatusAvailable
-                        : referralStats.pending_referral_rewards > 0
-                          ? styles.referralStatusPending
-                          : styles.referralStatusClaimed,
-                    ]}
-                  >
-                    <Text style={styles.referralStatusTitle}>Your Referral Reward</Text>
-                    <Text style={styles.referralStatusText}>
-                      {referralStats.available_referral_rewards > 0
-                        ? `Available now. You have ${referralStats.available_referral_rewards} reward${referralStats.available_referral_rewards > 1 ? 's' : ''} ready to use.`
-                        : referralStats.pending_referral_rewards > 0
-                          ? `Pending. You will get ₹${referralStats.discount_per_referral} after your referred person's order is delivered.`
-                          : `Claimed. You have already used ${referralStats.used_referral_rewards} referral reward${referralStats.used_referral_rewards > 1 ? 's' : ''}.`}
-                    </Text>
-                  </View>
-                )}
-
-                {referralStats?.bonus_code && (
-                  <View style={styles.bonusBox}>
-                    <Text style={styles.bonusTitle}>Referral reward ready</Text>
-                    <Text style={styles.bonusText}>
-                      Use code <Text style={styles.bonusCode}>{referralStats.bonus_code}</Text> at checkout for ₹{referralStats.bonus_amount} off.
-                    </Text>
-                  </View>
-                )}
-
-                {referralStats?.referred_by && (
-                  <View style={styles.referredByBox}>
-                    <Text style={styles.referredByText}>
-                      You were referred by {referralStats.referred_by_name || referralStats.referred_by_phone || 'a friend'}.
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
-          </View>
+          <TouchableOpacity
+            style={styles.referralCard}
+            activeOpacity={0.88}
+            onPress={() => navigation.navigate('ReferralProgram')}
+          >
+            <View style={styles.referralTextWrap}>
+              <Text style={styles.referralTitle}>Referral Program</Text>
+              <Text style={styles.referralSub}>
+                Your code: {displayUser.referral_code}
+              </Text>
+              <Text style={styles.referralHint}>
+                Invite friends, track rewards, and see your referral status on a separate page.
+              </Text>
+            </View>
+            <View style={styles.referralMeta}>
+              {referralStats?.available_referral_rewards > 0 && (
+                <View style={styles.referralPill}>
+                  <Text style={styles.referralPillText}>{referralStats.available_referral_rewards} ready</Text>
+                </View>
+              )}
+              <Text style={styles.referralArrow}>›</Text>
+            </View>
+          </TouchableOpacity>
         )}
 
         <View style={styles.section}>
@@ -270,9 +190,7 @@ export default function ProfileScreen({ navigation }) {
             disabled={saving || saved}
             activeOpacity={0.85}
           >
-            {saving
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.saveBtnText}>{saved ? 'Saved' : 'Save Changes'}</Text>}
+            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>{saved ? 'Saved' : 'Save Changes'}</Text>}
           </TouchableOpacity>
         </View>
 
@@ -360,6 +278,27 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   adminBadgeText: { color: Colors.primary, fontSize: FontSize.xs, fontWeight: '700' },
+  referralCard: {
+    backgroundColor: Colors.primaryPale,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+  },
+  referralTextWrap: { flex: 1 },
+  referralTitle: { fontSize: FontSize.md, fontWeight: '800', color: Colors.primary },
+  referralSub: { marginTop: 4, fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
+  referralHint: { marginTop: 6, fontSize: FontSize.xs, color: Colors.textMuted, lineHeight: 18 },
+  referralMeta: { alignItems: 'flex-end', justifyContent: 'space-between' },
+  referralPill: {
+    backgroundColor: Colors.white,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+  },
+  referralPillText: { color: Colors.primary, fontSize: FontSize.xs, fontWeight: '700' },
+  referralArrow: { fontSize: 26, color: Colors.primary, fontWeight: '700' },
   section: {
     backgroundColor: Colors.white,
     borderRadius: Radius.lg,
@@ -367,72 +306,6 @@ const styles = StyleSheet.create({
     ...Shadow.sm,
   },
   sectionTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text, marginBottom: Spacing.md },
-  referralToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  referralToggleTextWrap: { flex: 1, paddingRight: Spacing.md },
-  referralToggleSub: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
-  referralToggleIcon: { fontSize: FontSize.sm, color: Colors.textMuted, fontWeight: '700' },
-  referralSubTitle: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textMuted, marginBottom: Spacing.sm, marginTop: Spacing.md },
-  referralBox: {
-    backgroundColor: Colors.primaryPale,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-    borderWidth: 1.5,
-    borderColor: Colors.primaryLight,
-    borderStyle: 'dashed',
-  },
-  referralCode: { fontSize: FontSize.xl, fontWeight: '800', color: Colors.primary, letterSpacing: 4 },
-  referralCopy: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 4 },
-  referralHint: { fontSize: FontSize.xs, color: Colors.textMuted, textAlign: 'center' },
-  referralStats: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: Colors.primaryPale,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    alignItems: 'center',
-  },
-  statNum: { fontSize: FontSize.lg, fontWeight: '800', color: Colors.primary },
-  statLbl: { fontSize: 9, color: Colors.textMuted, textAlign: 'center', marginTop: 2 },
-  referralStatusBox: {
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginTop: Spacing.sm,
-    borderWidth: 1,
-  },
-  referralStatusPending: { backgroundColor: '#fff8e1', borderColor: '#ffd54f' },
-  referralStatusAvailable: { backgroundColor: '#d8f3dc', borderColor: '#95d5b2' },
-  referralStatusClaimed: { backgroundColor: '#eef2ff', borderColor: '#c7d2fe' },
-  referralStatusTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text, marginBottom: 4 },
-  referralStatusText: { fontSize: FontSize.xs, color: Colors.textMuted, lineHeight: 18 },
-  bonusBox: {
-    backgroundColor: '#fff8e1',
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginTop: Spacing.sm,
-    borderWidth: 1,
-    borderColor: '#ffd54f',
-  },
-  bonusTitle: { fontSize: FontSize.sm, fontWeight: '700', color: '#f57f17', marginBottom: 4 },
-  bonusText: { fontSize: FontSize.xs, color: Colors.text },
-  bonusCode: { fontWeight: '800', color: Colors.primary, letterSpacing: 1 },
-  referredByBox: {
-    backgroundColor: Colors.primaryPale,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginTop: Spacing.sm,
-  },
-  referredByText: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: '500' },
   field: { marginBottom: Spacing.md },
   fieldLabel: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textMuted, marginBottom: Spacing.xs },
   input: {

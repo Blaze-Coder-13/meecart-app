@@ -15,6 +15,8 @@ import OrdersScreen from '../screens/OrdersScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import FlashDealsScreen from '../screens/FlashDealsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
+import PromoOffersScreen from '../screens/PromoOffersScreen';
+import ReferralProgramScreen from '../screens/ReferralProgramScreen';
 import { useCart } from '../hooks/useCart';
 
 const Stack = createNativeStackNavigator();
@@ -167,6 +169,8 @@ function AppStack() {
       <Stack.Screen name="Checkout" component={CheckoutScreen} />
       <Stack.Screen name="FlashDeals" component={FlashDealsScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="PromoOffers" component={PromoOffersScreen} />
+      <Stack.Screen name="ReferralProgram" component={ReferralProgramScreen} />
     </Stack.Navigator>
   );
 }
