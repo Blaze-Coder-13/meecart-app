@@ -177,6 +177,7 @@ export default function LoginScreen() {
 
   async function finishSignupLogin(signupData, fallbackAddress) {
     if (signupData?.token && signupData?.user) {
+      await markAnnouncementsVisibleFromNow(signupData.user.phone);
       await authLogin(signupData.token, { ...signupData.user, address: fallbackAddress.trim() });
       return true;
     }
@@ -184,6 +185,7 @@ export default function LoginScreen() {
     try {
       const { data } = await login(phone, password);
       if (data?.token && data?.user) {
+        await markAnnouncementsVisibleFromNow(data.user.phone);
         await authLogin(data.token, data.user);
         return true;
       }
@@ -200,6 +202,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const { data } = await login(phone, password);
+      await markAnnouncementsVisibleFromNow(data.user.phone);
       await authLogin(data.token, data.user);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
@@ -257,7 +260,6 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const { data } = await signup(phone, name, address, password, referralCode || undefined);
-      await markAnnouncementsVisibleFromNow(phone);
       await finishSignupLogin(data, address);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {

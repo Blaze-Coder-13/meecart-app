@@ -56,5 +56,6 @@ export async function filterAnnouncementsForUser(items, user) {
   if (!key) return Array.isArray(items) ? items : [];
 
   const storedValue = await AsyncStorage.getItem(key);
-  return filterAnnouncements(items, parseDateValue(storedValue));
+  const visibleFrom = parseDateValue(storedValue) || new Date();
+  return filterAnnouncements(items, visibleFrom);
 }
