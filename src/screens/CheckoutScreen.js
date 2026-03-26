@@ -181,7 +181,7 @@ export default function CheckoutScreen({ navigation, route }) {
 
   async function handlePlaceOrder() {
     if (selectedAddress.trim().length < 10) {
-      Alert.alert('Address Required', 'Please enter your complete delivery address.');
+      Alert.alert('Address Required', 'Please enter your delivery address clearly (e.g., House/Shop name, Zone, Landmark). Short addresses without zones cannot be delivered.');
       return;
     }
 
