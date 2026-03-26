@@ -16,11 +16,12 @@ const LOCAL_LOGO = require('./assets/logo.png');
 const SETTINGS_CACHE_KEY = 'meecart_app_settings';
 const SETTINGS_FETCH_TIMEOUT_MS = 5000;
 
-function SplashView({ logo, name }) {
+function SplashView({ logo, name, onLogoError }) {
   return (
     <View style={{ flex: 1, backgroundColor: '#2d6a4f', alignItems: 'center', justifyContent: 'center' }}>
       <Image
         source={logo ? { uri: logo } : LOCAL_LOGO}
+        onError={onLogoError}
         style={{ width: 120, height: 120, borderRadius: 24, marginBottom: 20 }}
         resizeMode="contain"
       />
@@ -39,6 +40,7 @@ function AppContent() {
   const [appLogo, setAppLogo] = useState('');
   const [appName, setAppName] = useState('Meecart');
   const [ready, setReady] = useState(false);
+  const [useLocalLogo, setUseLocalLogo] = useState(false);
 
   useEffect(() => {
     loadBranding();
@@ -105,7 +107,7 @@ function AppContent() {
   }
 
   if (!ready || loading) {
-    return <SplashView logo={appLogo} name={appName} />;
+    return <SplashView logo={!useLocalLogo ? appLogo : ''} name={appName} onLogoError={() => setUseLocalLogo(true)} />;
   }
 
   return (

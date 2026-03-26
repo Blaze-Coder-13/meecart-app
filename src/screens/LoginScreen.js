@@ -30,6 +30,7 @@ function isNetworkFailure(err) {
 function AppLogo({ size = 60 }) {
   const [logo, setLogo] = useState('');
   const [name, setName] = useState('Meecart');
+  const [useLocalLogo, setUseLocalLogo] = useState(false);
 
   useEffect(() => {
     getSettings().then(({ data }) => {
@@ -40,7 +41,8 @@ function AppLogo({ size = 60 }) {
 
   return (
     <Image
-      source={logo ? { uri: logo } : LOCAL_LOGO}
+      source={!useLocalLogo && logo ? { uri: logo } : LOCAL_LOGO}
+      onError={() => setUseLocalLogo(true)}
       style={{ width: size, height: size, borderRadius: size * 0.2, marginBottom: 8 }}
       resizeMode="contain"
     />

@@ -38,6 +38,7 @@ export default function HomeScreen({ navigation }) {
   const [search, setSearch] = useState('');
   const [appLogo, setAppLogo] = useState('');
   const [appName, setAppName] = useState('Meecart');
+  const [useLocalLogo, setUseLocalLogo] = useState(false);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const bannerScrollRef = useRef(null);
   const bannerIndexRef = useRef(0);
@@ -399,7 +400,8 @@ export default function HomeScreen({ navigation }) {
       <View style={styles.header}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
           <Image
-            source={appLogo ? { uri: appLogo } : LOCAL_LOGO}
+            source={!useLocalLogo && appLogo ? { uri: appLogo } : LOCAL_LOGO}
+            onError={() => setUseLocalLogo(true)}
             style={{ width: 36, height: 36, borderRadius: 8 }}
             resizeMode="contain"
           />
