@@ -82,6 +82,9 @@ export const getMyOrder = (id) =>
 export const applyPromoCode = (code, order_total) =>
   request('POST', '/api/admin/promos/apply', { code, order_total });
 
+export const getAvailablePromos = () =>
+  request('GET', '/api/admin/promos/public');
+
 // ── REFERRAL ──────────────────────────────────────────
 export const getReferralStats = () =>
   request('GET', '/api/auth/referral-stats');

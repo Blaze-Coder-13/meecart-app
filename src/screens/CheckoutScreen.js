@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { placeOrder, getSettings, applyPromoCode, getMe, getReferralStats } from '../api/client';
+import { placeOrder, getSettings, applyPromoCode, getMe, getReferralStats, getAvailablePromos } from '../api/client';
 import { useCart } from '../hooks/useCart';
 import { useAuth } from '../hooks/useAuth';
 import { Colors, FontSize, Spacing, Radius, Shadow } from '../utils/theme';
@@ -24,6 +24,18 @@ function isNetworkFailure(err) {
   return message.includes('network request failed') || message.includes('network error');
 }
 
+function formatPromoSummary(promo) {
+  if (promo?.discount_type === 'percentage') {
+    return `${promo.discount_value}% off`;
+  }
+  return `₹${promo?.discount_value || 0} off`;
+}
+
+function formatPromoRequirement(promo) {
+  const minOrderValue = Number(promo?.min_order_value || 0);
+  return minOrderValue > 0 ? `On orders of ₹${minOrderValue} or more` : 'No minimum order';
+}
+
 export default function CheckoutScreen({ navigation }) {
   const { user } = useAuth();
   const { cartItems, cartTotal, clearCart, addToCart, removeFromCart } = useCart();
@@ -36,6 +48,7 @@ export default function CheckoutScreen({ navigation }) {
   const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState(null);
   const [promoLoading, setPromoLoading] = useState(false);
+  const [availablePromos, setAvailablePromos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [referralStats, setReferralStats] = useState(null);
   const [settings, setSettings] = useState({
@@ -48,6 +61,7 @@ export default function CheckoutScreen({ navigation }) {
     loadSettings();
     loadUserAddress();
     loadReferralDiscount();
+    loadAvailablePromos();
   }, []);
 
   async function loadUserAddress() {
@@ -88,6 +102,15 @@ export default function CheckoutScreen({ navigation }) {
         setReferralDiscount(0);
       }
     } catch {}
+  }
+
+  async function loadAvailablePromos() {
+    try {
+      const { data } = await getAvailablePromos();
+      setAvailablePromos(Array.isArray(data) ? data : []);
+    } catch {
+      setAvailablePromos([]);
+    }
   }
 
   const FREE_DELIVERY_ABOVE = settings.free_delivery_above;
@@ -163,6 +186,23 @@ export default function CheckoutScreen({ navigation }) {
       Alert.alert('Unable to Apply Reward', err.response?.data?.error || 'Referral reward could not be applied.');
       setPromoApplied(null);
       setPromoCode('');
+    } finally {
+      setPromoLoading(false);
+    }
+  }
+
+  async function applyAvailablePromo(code) {
+    setPromoCode(code);
+    setPromoApplied(null);
+    setPromoLoading(true);
+    try {
+      const { data } = await applyPromoCode(code, cartTotal);
+      setPromoApplied(data);
+      setPromoCode(code);
+      Alert.alert('Promo Applied!', `Discount of ₹${data.discount} applied!`);
+    } catch (err) {
+      Alert.alert('Unable to Apply', getApiErrorMessage(err, 'This offer could not be applied right now.'));
+      setPromoApplied(null);
     } finally {
       setPromoLoading(false);
     }
@@ -392,6 +432,41 @@ export default function CheckoutScreen({ navigation }) {
             {promoApplied && (
               <Text style={styles.promoSuccess}>✅ {promoApplied.code} applied — ₹{promoApplied.discount} off!</Text>
             )}
+            {availablePromos.length > 0 && (
+              <View style={styles.availableOffersWrap}>
+                <Text style={styles.availableOffersTitle}>Available Offers</Text>
+                {availablePromos.map((promo) => {
+                  const minOrderValue = Number(promo.min_order_value || 0);
+                  const qualifies = cartTotal >= minOrderValue;
+                  const isApplied = promoApplied?.code === promo.code;
+
+                  return (
+                    <View key={promo.code} style={styles.offerCard}>
+                      <View style={styles.offerTextWrap}>
+                        <Text style={styles.offerCode}>{promo.code}</Text>
+                        <Text style={styles.offerSummary}>{formatPromoSummary(promo)}</Text>
+                        <Text style={styles.offerRequirement}>{formatPromoRequirement(promo)}</Text>
+                        {!qualifies && (
+                          <Text style={styles.offerHint}>
+                            Add ₹{minOrderValue - cartTotal} more to use this offer
+                          </Text>
+                        )}
+                      </View>
+                      <TouchableOpacity
+                        style={[
+                          styles.offerApplyBtn,
+                          (!qualifies || promoLoading || isApplied) && styles.offerApplyBtnDisabled,
+                        ]}
+                        disabled={!qualifies || promoLoading || isApplied}
+                        onPress={() => applyAvailablePromo(promo.code)}
+                      >
+                        <Text style={styles.offerApplyBtnText}>{isApplied ? 'Applied' : 'Apply'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
           </View>
 
           {/* Delivery Address */}
@@ -566,6 +641,67 @@ const styles = StyleSheet.create({
   },
   promoBtnText: { color: Colors.white, fontSize: FontSize.sm, fontWeight: '700' },
   promoSuccess: { color: Colors.primary, fontSize: FontSize.xs, fontWeight: '600', marginTop: Spacing.sm },
+  availableOffersWrap: {
+    marginTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingTop: Spacing.md,
+    gap: Spacing.sm,
+  },
+  availableOffersTitle: {
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  offerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    backgroundColor: Colors.background,
+  },
+  offerTextWrap: {
+    flex: 1,
+  },
+  offerCode: {
+    fontSize: FontSize.sm,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  offerSummary: {
+    fontSize: FontSize.sm,
+    color: Colors.text,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  offerRequirement: {
+    fontSize: FontSize.xs,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  offerHint: {
+    fontSize: FontSize.xs,
+    color: '#b26a00',
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  offerApplyBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+  },
+  offerApplyBtnDisabled: {
+    backgroundColor: '#a0b5ac',
+  },
+  offerApplyBtnText: {
+    color: Colors.white,
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+  },
   referralRewardBtn: {
     backgroundColor: Colors.primaryPale,
     borderRadius: Radius.md,
