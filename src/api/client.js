@@ -1,28 +1,42 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config/api';
 
-async function request(method, path, body) {
+function isNetworkError(err) {
+  const message = String(err?.message || '').toLowerCase();
+  return message.includes('network request failed') || message.includes('network error');
+}
+
+async function request(method, path, body, retries = 1) {
   const token = await AsyncStorage.getItem('meecart_token');
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const raw = await res.text();
-  let data = null;
+  try {
+    const res = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
 
-  if (raw) {
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      data = { message: raw };
+    const raw = await res.text();
+    let data = null;
+
+    if (raw) {
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        data = { message: raw };
+      }
     }
-  }
 
-  if (!res.ok) throw { response: { data, status: res.status } };
-  return { data: data ?? {} };
+    if (!res.ok) throw { response: { data, status: res.status } };
+    return { data: data ?? {} };
+  } catch (err) {
+    if (retries > 0 && isNetworkError(err)) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      return request(method, path, body, retries - 1);
+    }
+    throw err;
+  }
 }
 
 // ── AUTH ──────────────────────────────────────────────
