@@ -204,7 +204,7 @@ export default function CheckoutScreen({ navigation, route }) {
       return;
     }
 
-    confirmOrder(orderIdempotencyKey);
+    confirmOrder(idempotencyKey);
   }
 
   async function confirmOrder(idempotencyKey) {
