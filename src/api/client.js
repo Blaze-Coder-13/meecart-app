@@ -83,8 +83,8 @@ export const getProduct = (id) =>
   request('GET', `/api/products/${id}`);
 
 // ── ORDERS ────────────────────────────────────────────
-export const placeOrder = (items, address, notes, promo_code, apply_referral_discount = false, discount = 0, final_total = 0) =>
-  request('POST', '/api/orders', { items, address, notes, promo_code, apply_referral_discount, discount, final_total });
+export const placeOrder = (items, address, notes, promo_code, apply_referral_discount = false, discount = 0, final_total = 0, idempotency_key = '') =>
+  request('POST', '/api/orders', { items, address, notes, promo_code, apply_referral_discount, discount, final_total, idempotency_key });
 
 export const getMyOrders = () =>
   request('GET', '/api/orders/my');

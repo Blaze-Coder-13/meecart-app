@@ -32,6 +32,7 @@ export default function CheckoutScreen({ navigation, route }) {
   const [promoApplied, setPromoApplied] = useState(null);
   const [promoLoading, setPromoLoading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [orderIdempotencyKey, setOrderIdempotencyKey] = useState('');
   const [referralStats, setReferralStats] = useState(null);
   const [settings, setSettings] = useState({
     free_delivery_above: 150,
@@ -180,6 +181,11 @@ export default function CheckoutScreen({ navigation, route }) {
   }
 
   async function handlePlaceOrder() {
+    if (loading) return;
+
+    const idempotencyKey = `order_${Date.now()}_${Math.random().toString(36).slice(2,9)}`;
+    setOrderIdempotencyKey(idempotencyKey);
+
     if (selectedAddress.trim().length < 10) {
       Alert.alert('Address Required', 'Please enter your delivery address clearly (e.g., House/Shop name, Zone, Landmark). Short addresses without zones cannot be delivered.');
       return;
@@ -192,16 +198,16 @@ export default function CheckoutScreen({ navigation, route }) {
         `Minimum order is ₹${settings.min_order_value}. Add ₹${needed} more or continue with ₹${DELIVERY_CHARGE} delivery charge.`,
         [
           { text: 'Add More Items', style: 'cancel', onPress: () => navigation.goBack() },
-          { text: 'Continue', onPress: confirmOrder },
+          { text: 'Continue', onPress: () => confirmOrder(idempotencyKey) },
         ]
       );
       return;
     }
 
-    confirmOrder();
+    confirmOrder(orderIdempotencyKey);
   }
 
-  async function confirmOrder() {
+  async function confirmOrder(idempotencyKey) {
     setLoading(true);
     try {
       const items = cartItems.map((item) => ({
@@ -218,7 +224,8 @@ export default function CheckoutScreen({ navigation, route }) {
         promoApplied?.code,
         referralDiscount > 0,
         discount,
-        finalTotal
+        finalTotal,
+        idempotencyKey
       );
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
