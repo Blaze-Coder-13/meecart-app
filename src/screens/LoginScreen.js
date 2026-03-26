@@ -6,13 +6,31 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { sendOTP, verifyOTP, signup, login, resetPassword, getSettings } from '../api/client';
+import { sendOTP, verifyOTP, signup, login, resetPassword, getSettings, validateReferralCode } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
+import { markAnnouncementsVisibleFromNow } from '../utils/announcements';
 import { Colors, FontSize, Spacing, Radius } from '../utils/theme';
+
+const LOCAL_LOGO = require('../../assets/logo.png');
+
+function getApiErrorMessage(err, fallback) {
+  return (
+    err?.response?.data?.error ||
+    err?.response?.data?.message ||
+    err?.message ||
+    fallback
+  );
+}
+
+function isNetworkFailure(err) {
+  const message = getApiErrorMessage(err, '').toLowerCase();
+  return message.includes('network request failed') || message.includes('network error');
+}
 
 function AppLogo({ size = 60 }) {
   const [logo, setLogo] = useState('');
   const [name, setName] = useState('Meecart');
+  const [useLocalLogo, setUseLocalLogo] = useState(false);
 
   useEffect(() => {
     getSettings().then(({ data }) => {
@@ -21,23 +39,13 @@ function AppLogo({ size = 60 }) {
     }).catch(() => {});
   }, []);
 
-  if (logo) {
-    return (
-      <Image
-        source={{ uri: logo }}
-        style={{ width: size, height: size, borderRadius: size * 0.2, marginBottom: 8 }}
-        resizeMode="contain"
-      />
-    );
-  }
   return (
-    <View style={{
-      width: size, height: size, borderRadius: size * 0.2,
-      backgroundColor: Colors.primary,
-      alignItems: 'center', justifyContent: 'center', marginBottom: 8,
-    }}>
-      <Text style={{ fontSize: size * 0.45 }}>🛒</Text>
-    </View>
+    <Image
+      source={!useLocalLogo && logo ? { uri: logo } : LOCAL_LOGO}
+      onError={() => setUseLocalLogo(true)}
+      style={{ width: size, height: size, borderRadius: size * 0.2, marginBottom: 8 }}
+      resizeMode="contain"
+    />
   );
 }
 
@@ -112,6 +120,8 @@ export default function LoginScreen() {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [referralCode, setReferralCode] = useState('');
+  const [referralStatus, setReferralStatus] = useState(null);
+  const [checkingReferral, setCheckingReferral] = useState(false);
   const [appName, setAppName] = useState('Meecart');
 
   useEffect(() => {
@@ -120,13 +130,70 @@ export default function LoginScreen() {
     }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!referralCode.trim()) {
+      setCheckingReferral(false);
+      setReferralStatus(null);
+      return undefined;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      setCheckingReferral(true);
+      try {
+        const { data } = await validateReferralCode(referralCode.trim().toUpperCase());
+        setReferralStatus({ valid: true, message: data.message || 'Valid referral code' });
+      } catch (err) {
+        setReferralStatus({ valid: false, message: err.response?.data?.error || 'Invalid referral code' });
+      } finally {
+        setCheckingReferral(false);
+      }
+    }, 350);
+
+    return () => {
+      clearTimeout(timeoutId);
+      setCheckingReferral(false);
+    };
+  }, [referralCode]);
+
   function resetState() {
     setPhone(''); setPassword(''); setConfirmPassword('');
     setOtpCode(''); setName(''); setAddress(''); setReferralCode('');
+    setReferralStatus(null);
     setError(''); setShowPassword(false); setShowConfirm(false);
   }
 
   function goTo(s) { setError(''); setOtpCode(''); setScreen(s); }
+
+  function goToLoginWithPhone(nextPhone, message) {
+    setOtpCode('');
+    setPassword('');
+    setConfirmPassword('');
+    setReferralCode('');
+    setReferralStatus(null);
+    setScreen('login');
+    if (nextPhone) setPhone(nextPhone);
+    setError(message || '');
+  }
+
+  async function finishSignupLogin(signupData, fallbackAddress) {
+    if (signupData?.token && signupData?.user) {
+      await markAnnouncementsVisibleFromNow(signupData.user.phone);
+      await authLogin(signupData.token, { ...signupData.user, address: fallbackAddress.trim() });
+      return true;
+    }
+
+    try {
+      const { data } = await login(phone, password);
+      if (data?.token && data?.user) {
+        await markAnnouncementsVisibleFromNow(data.user.phone);
+        await authLogin(data.token, data.user);
+        return true;
+      }
+    } catch {}
+
+    goToLoginWithPhone(phone, 'Account created successfully. Please login.');
+    return false;
+  }
 
   async function handleLogin() {
     setError('');
@@ -135,10 +202,11 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const { data } = await login(phone, password);
+      await markAnnouncementsVisibleFromNow(data.user.phone);
       await authLogin(data.token, data.user);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
-      setError(err.response?.data?.error || 'Login failed. Try again.');
+      setError(getApiErrorMessage(err, 'Login failed. Try again.'));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally { setLoading(false); }
   }
@@ -152,7 +220,15 @@ export default function LoginScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       goTo('register_otp');
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to send OTP.');
+      const message = getApiErrorMessage(err, 'Failed to send OTP.');
+      if (/already registered|please login/i.test(message)) {
+        goToLoginWithPhone(phone, 'This number is already registered. Please login.');
+      } else if (isNetworkFailure(err)) {
+        goTo('register_otp');
+        setError('Network was unstable. If you received the OTP, enter it now; otherwise tap Resend OTP.');
+      } else {
+        setError(message);
+      }
     } finally { setLoading(false); }
   }
 
@@ -165,7 +241,11 @@ export default function LoginScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       goTo('register_details');
     } catch (err) {
-      setError(err.response?.data?.error || 'Invalid or expired OTP.');
+      if (isNetworkFailure(err)) {
+        setError('Network was unstable. Please tap Verify OTP once again with the same code.');
+      } else {
+        setError(getApiErrorMessage(err, 'Invalid or expired OTP.'));
+      }
     } finally { setLoading(false); }
   }
 
@@ -175,13 +255,27 @@ export default function LoginScreen() {
     if (!address.trim()) { setError('Enter your delivery address'); return; }
     if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
     if (password !== confirmPassword) { setError('Passwords do not match'); return; }
+    if (referralCode.trim() && checkingReferral) { setError('Please wait while we verify the referral code'); return; }
+    if (referralCode.trim() && !referralStatus?.valid) { setError('Please enter a valid referral code or remove it'); return; }
     setLoading(true);
     try {
       const { data } = await signup(phone, name, address, password, referralCode || undefined);
-      await authLogin(data.token, { ...data.user, address: address.trim() });
+      await finishSignupLogin(data, address);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
-      setError(err.response?.data?.error || 'Signup failed. Try again.');
+      if (isNetworkFailure(err)) {
+        const recovered = await finishSignupLogin(null, address);
+        if (recovered) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          return;
+        }
+      }
+      const message = getApiErrorMessage(err, 'Signup failed. Try again.');
+      if (/already registered|please login/i.test(message)) {
+        goToLoginWithPhone(phone, 'This number is already registered. Please login.');
+      } else {
+        setError(message);
+      }
     } finally { setLoading(false); }
   }
 
@@ -194,7 +288,12 @@ export default function LoginScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       goTo('forgot_otp');
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to send OTP.');
+      if (isNetworkFailure(err)) {
+        goTo('forgot_otp');
+        setError('Network was unstable. If you received the OTP, enter it now; otherwise tap Send OTP again.');
+      } else {
+        setError(getApiErrorMessage(err, 'Failed to send OTP.'));
+      }
     } finally { setLoading(false); }
   }
 
@@ -207,7 +306,11 @@ export default function LoginScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       goTo('forgot_reset');
     } catch (err) {
-      setError(err.response?.data?.error || 'Invalid or expired OTP.');
+      if (isNetworkFailure(err)) {
+        setError('Network was unstable. Please tap Verify OTP once again with the same code.');
+      } else {
+        setError(getApiErrorMessage(err, 'Invalid or expired OTP.'));
+      }
     } finally { setLoading(false); }
   }
 
@@ -223,7 +326,7 @@ export default function LoginScreen() {
         { text: 'OK', onPress: () => { resetState(); goTo('login'); } }
       ]);
     } catch (err) {
-      setError(err.response?.data?.error || 'Reset failed. Try again.');
+      setError(getApiErrorMessage(err, 'Reset failed. Try again.'));
     } finally { setLoading(false); }
   }
 
@@ -334,6 +437,9 @@ export default function LoginScreen() {
           {/* REGISTER DETAILS */}
           {screen === 'register_details' && (
             <View style={[s.card, { marginBottom: 40 }]}>
+              <TouchableOpacity onPress={() => { resetState(); goTo('login'); }} style={s.backRow}>
+                <Text style={s.backText}>Back to Login</Text>
+              </TouchableOpacity>
               <Text style={s.cardTitle}>Complete Profile</Text>
               <Text style={s.cardSub}>+91 {phone}</Text>
               <View style={s.fieldWrap}>
@@ -350,15 +456,35 @@ export default function LoginScreen() {
               <View style={s.fieldWrap}>
                 <TextInput
                   style={s.input} value={referralCode}
-                  onChangeText={setReferralCode}
+                  onChangeText={text => setReferralCode(text.toUpperCase())}
                   placeholder="Referral Code (optional)"
                   placeholderTextColor={Colors.textMuted}
                   autoCapitalize="characters"
                 />
-                {referralCode.length > 0 && (
-                  <View style={{ backgroundColor: '#d8f3dc', borderRadius: 8, padding: 10, marginTop: 6 }}>
-                    <Text style={{ color: '#2d6a4f', fontSize: 12, fontWeight: '600' }}>
+                {checkingReferral && (
+                  <View style={[s.referralHintBox, s.referralHintBoxNeutral]}>
+                    <Text style={[s.referralHintText, s.referralHintTextNeutral]}>
+                      Checking referral code...
+                    </Text>
+                  </View>
+                )}
+                {referralStatus?.valid && (
+                  <View style={[
+                    s.referralHintBox,
+                    referralStatus.valid ? s.referralHintBoxValid : s.referralHintBoxInvalid,
+                  ]}>
+                    <Text style={[
+                      s.referralHintText,
+                      referralStatus.valid ? s.referralHintTextValid : s.referralHintTextInvalid,
+                    ]}>
                       🎉 Valid referral code = ₹30 off your first order!
+                    </Text>
+                  </View>
+                )}
+                {referralStatus && !referralStatus.valid && (
+                  <View style={[s.referralHintBox, s.referralHintBoxInvalid]}>
+                    <Text style={[s.referralHintText, s.referralHintTextInvalid]}>
+                      Referral code invalid. {referralStatus.message}
                     </Text>
                   </View>
                 )}
@@ -507,4 +633,13 @@ const s = StyleSheet.create({
   sentText: { color: Colors.primary, fontSize: FontSize.sm, fontWeight: '600' },
   resendWrap: { alignItems: 'center', marginTop: Spacing.lg, padding: 8 },
   resendText: { fontSize: FontSize.sm, color: Colors.textMuted },
+  referralHintBox: { borderRadius: 8, padding: 10, marginTop: 6 },
+  referralHintBoxNeutral: { backgroundColor: '#f3f4f6' },
+  referralHintBoxValid: { backgroundColor: '#d8f3dc' },
+  referralHintBoxInvalid: { backgroundColor: '#fee2e2' },
+  referralHintText: { fontSize: 12, fontWeight: '600' },
+  referralHintTextNeutral: { color: Colors.textMuted },
+  referralHintTextValid: { color: '#2d6a4f' },
+  referralHintTextInvalid: { color: '#991b1b' },
 });
+

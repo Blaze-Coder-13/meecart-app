@@ -3,21 +3,25 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, Image, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 
 import { AuthProvider, useAuth } from './src/hooks/useAuth';
 import { CartProvider } from './src/hooks/useCart';
 import AppNavigator from './src/navigation/AppNavigator';
+import { API_BASE_URL } from './src/config/api';
+import { savePushToken } from './src/api/client';
+import { registerForPushNotifications } from './src/utils/notifications';
 
 const LOCAL_LOGO = require('./assets/logo.png');
 const SETTINGS_CACHE_KEY = 'meecart_app_settings';
-const BACKEND = 'https://meecart-backend-production.up.railway.app';
 const SETTINGS_FETCH_TIMEOUT_MS = 5000;
 
-function SplashView({ logo, name }) {
+function SplashView({ logo, name, onLogoError }) {
   return (
     <View style={{ flex: 1, backgroundColor: '#2d6a4f', alignItems: 'center', justifyContent: 'center' }}>
       <Image
         source={logo ? { uri: logo } : LOCAL_LOGO}
+        onError={onLogoError}
         style={{ width: 120, height: 120, borderRadius: 24, marginBottom: 20 }}
         resizeMode="contain"
       />
@@ -36,10 +40,41 @@ function AppContent() {
   const [appLogo, setAppLogo] = useState('');
   const [appName, setAppName] = useState('Meecart');
   const [ready, setReady] = useState(false);
+  const [useLocalLogo, setUseLocalLogo] = useState(false);
 
   useEffect(() => {
     loadBranding();
   }, []);
+
+  useEffect(() => {
+    if (!user?.phone) return undefined;
+
+    let active = true;
+    const subscription = Notifications.addPushTokenListener(async ({ data }) => {
+      try {
+        await savePushToken(data, user.phone);
+      } catch (err) {
+        console.error('Failed to refresh push token:', err);
+      }
+    });
+
+    async function setupNotifications() {
+      try {
+        const pushToken = await registerForPushNotifications();
+        if (!active || !pushToken) return;
+        await savePushToken(pushToken, user.phone);
+      } catch (err) {
+        console.error('Failed to register push notifications:', err);
+      }
+    }
+
+    setupNotifications();
+
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, [user?.phone]);
 
   async function loadBranding() {
     try {
@@ -58,7 +93,7 @@ function AppContent() {
       const timeoutId = setTimeout(() => controller.abort(), SETTINGS_FETCH_TIMEOUT_MS);
       let res;
       try {
-        res = await fetch(`${BACKEND}/api/settings`, { signal: controller.signal });
+        res = await fetch(`${API_BASE_URL}/api/settings`, { signal: controller.signal });
       } finally {
         clearTimeout(timeoutId);
       }
@@ -72,7 +107,7 @@ function AppContent() {
   }
 
   if (!ready || loading) {
-    return <SplashView logo={appLogo} name={appName} />;
+    return <SplashView logo={!useLocalLogo ? appLogo : ''} name={appName} onLogoError={() => setUseLocalLogo(true)} />;
   }
 
   return (
