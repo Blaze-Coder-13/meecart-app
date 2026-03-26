@@ -49,21 +49,10 @@ export default function PromoOffersScreen({ navigation, route }) {
   }
 
   const mergedOffers = useMemo(() => {
-    const baseOffers = [...offers];
-    if (referralStats?.bonus_code) {
-      const exists = baseOffers.some((offer) => offer.code === referralStats.bonus_code);
-      if (!exists) {
-        baseOffers.unshift({
-          code: referralStats.bonus_code,
-          discount_type: 'flat',
-          discount_value: referralStats.bonus_amount || referralStats.discount_per_referral || 0,
-          min_order_value: 0,
-          is_referral_bonus: true,
-        });
-      }
-    }
-    return baseOffers;
-  }, [offers, referralStats]);
+    // For the public offers list, we only show non-referral static promos.
+    // Referral bonus codes are managed via ReferralProgram screen only.
+    return offers;
+  }, [offers]);
 
   async function handleApply(code) {
     setApplyingCode(code);
