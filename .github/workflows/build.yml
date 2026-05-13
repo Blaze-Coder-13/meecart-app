@@ -2,8 +2,13 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, feature/otp-work ]
   workflow_dispatch:
+    inputs:
+      regenerate_android:
+        description: "Run Expo prebuild before building"
+        required: false
+        default: "false"
 
 concurrency:
   group: android-build-${{ github.ref }}
@@ -12,6 +17,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx3g -Dorg.gradle.caching=true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -35,24 +42,56 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Cache generated Android project
-        id: android-cache
+      - name: Cache Expo and Android build intermediates
         uses: actions/cache@v4
         with:
-          path: android
-          key: android-prebuild-${{ runner.os }}-${{ hashFiles('app.json', 'package.json', 'package-lock.json', 'eas.json') }}
+          path: |
+            ~/.expo
+            android/.gradle
+            android/app/build
+          key: ${{ runner.os }}-android-build-${{ hashFiles('package-lock.json', 'app.json', 'package.json', 'android/**', 'assets/**') }}
+          restore-keys: |
+            ${{ runner.os }}-android-build-${{ hashFiles('package-lock.json', 'app.json', 'package.json', 'android/**') }}
+            ${{ runner.os }}-android-build-
 
-      - name: Generate Android files
-        if: steps.android-cache.outputs.cache-hit != 'true'
-        run: npx expo prebuild --platform android --non-interactive
+      - name: Detect Android project
+        id: android_project
+        run: |
+          if [ -f android/gradlew ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Regenerate Android files
+        if: ${{ steps.android_project.outputs.exists != 'true' || (github.event_name == 'workflow_dispatch' && inputs.regenerate_android == 'true') }}
+        run: |
+          rm -rf android
+          npx expo prebuild --platform android --clean --non-interactive
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
+      - name: Generate debug keystore if missing
+        run: |
+          if [ ! -f android/app/debug.keystore ]; then
+            keytool -genkeypair \
+              -v \
+              -storetype PKCS12 \
+              -keystore android/app/debug.keystore \
+              -storepass android \
+              -keypass android \
+              -alias androiddebugkey \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
       - name: Build release APK
         run: |
           cd android
-          ./gradlew assembleRelease --no-daemon --build-cache --max-workers=2
+          ./gradlew assembleRelease --build-cache --parallel --max-workers=3
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  RefreshControl, ActivityIndicator, Image,
+  RefreshControl, ActivityIndicator, Image, Alert,
 } from 'react-native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getMyOrders, getMyOrder } from '../api/client';
+import { getMyOrders, getMyOrder, cancelMyOrder } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
 import { Colors, FontSize, Spacing, Radius, Shadow } from '../utils/theme';
 
@@ -18,6 +20,73 @@ const STATUS_CONFIG = {
 };
 
 const TIMELINE_STEPS = ['pending', 'confirmed', 'packing', 'out_for_delivery', 'delivered'];
+const CUSTOMER_CANCEL_STATUSES = new Set(['pending', 'confirmed']);
+
+function getApiErrorMessage(err, fallback) {
+  return err?.response?.data?.error || err?.response?.data?.message || err?.message || fallback;
+}
+
+function formatUpdateTime(value) {
+  if (!value) return '';
+  return new Date(value).toLocaleString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function buildOrderUpdates(order, detail) {
+  const rawUpdates = Array.isArray(detail?.updates) ? detail.updates : [];
+  const updatesByStatus = new Map();
+
+  rawUpdates.forEach((update, index) => {
+    if (!update?.status) return;
+    updatesByStatus.set(update.status, {
+      ...update,
+      id: update.id || `${update.status}-${index}`,
+    });
+  });
+
+  if (order?.status === 'cancelled' && !updatesByStatus.has('cancelled')) {
+    updatesByStatus.set('cancelled', {
+      id: 'fallback-cancelled',
+      status: 'cancelled',
+      title: 'Order Cancelled',
+      message: 'This order was cancelled.',
+      created_at: detail?.updated_at || order?.updated_at || order?.created_at,
+    });
+  }
+
+  const currentIdx = TIMELINE_STEPS.indexOf(order?.status);
+  if (currentIdx >= 0) {
+    TIMELINE_STEPS.slice(0, currentIdx + 1).forEach((status, index) => {
+      if (updatesByStatus.has(status)) return;
+      const cfg = STATUS_CONFIG[status];
+      updatesByStatus.set(status, {
+        id: `fallback-${status}`,
+        status,
+        title: cfg?.label || 'Order Update',
+        message:
+          status === order?.status
+            ? `Your order is now ${cfg?.label?.toLowerCase() || 'updated'}.`
+            : `${cfg?.label || 'Order step'} completed.`,
+        created_at:
+          status === order?.status
+            ? detail?.updated_at || order?.updated_at || order?.created_at
+            : order?.created_at,
+      });
+    });
+  }
+
+  return Array.from(updatesByStatus.values()).sort((a, b) => {
+    const aIdx = TIMELINE_STEPS.indexOf(a.status);
+    const bIdx = TIMELINE_STEPS.indexOf(b.status);
+    const safeA = aIdx === -1 ? 999 : aIdx;
+    const safeB = bIdx === -1 ? 999 : bIdx;
+    return safeA - safeB;
+  });
+}
 
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
@@ -79,14 +148,42 @@ function OrderTimeline({ status }) {
   );
 }
 
-function OrderCard({ order, onPress, expanded, detail }) {
+function OrderUpdates({ updates }) {
+  if (!updates?.length) return null;
+
+  return (
+    <View style={styles.updatesSection}>
+      <Text style={styles.sectionLabel}>Order Updates</Text>
+      {updates.map(update => (
+        <View key={update.id} style={styles.updateCard}>
+          <View style={styles.updateIconWrap}>
+            <Text style={styles.updateIcon}>
+              {(STATUS_CONFIG[update.status] || STATUS_CONFIG.pending).icon}
+            </Text>
+          </View>
+          <View style={styles.updateContent}>
+            <View style={styles.updateHeader}>
+              <Text style={styles.updateTitle}>{update.title}</Text>
+              <Text style={styles.updateMeta}>{formatUpdateTime(update.created_at)}</Text>
+            </View>
+            <Text style={styles.updateMessage}>{update.message}</Text>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function OrderCard({ order, onPress, expanded, detail, onCancel, canceling }) {
   const date = new Date(order.created_at).toLocaleDateString('en-IN', {
     day: 'numeric', month: 'short', year: 'numeric',
   });
 
   const subtotal = detail?.subtotal || order.total;
-  const deliveryCharges = detail?.delivery_charges || 0;
-  const discount = detail?.discount || 0;
+  const deliveryCharges = detail?.delivery_charges ?? order.delivery_charges ?? 0;
+  const discount = detail?.discount ?? order.discount ?? 0;
+  const displayUpdates = buildOrderUpdates(order, detail);
+  const canCancel = CUSTOMER_CANCEL_STATUSES.has(order.status);
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
@@ -96,6 +193,9 @@ function OrderCard({ order, onPress, expanded, detail }) {
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={styles.orderTotal}>₹{order.total}</Text>
+          {discount > 0 && (
+            <Text style={styles.orderDiscount}>Saved ₹{discount}</Text>
+          )}
           <Text style={styles.codLabel}>💵 Cash on Delivery</Text>
         </View>
       </View>
@@ -106,6 +206,7 @@ function OrderCard({ order, onPress, expanded, detail }) {
         <View style={styles.expanded}>
 
           <OrderTimeline status={order.status} />
+          <OrderUpdates updates={displayUpdates} />
 
           {detail.items?.length > 0 && (
             <View style={styles.itemsSection}>
@@ -116,7 +217,7 @@ function OrderCard({ order, onPress, expanded, detail }) {
                     ? <Image source={{ uri: i.image_url }} style={styles.detailImage} />
                     : <Text style={styles.detailEmoji}>{i.image_emoji}</Text>
                   }
-                  <Text style={styles.detailName}>{i.name} × {i.quantity} {i.unit}</Text>
+                  <Text style={styles.detailName}>{i.name} ({i.quantity} x {i.unit})</Text>
                   <Text style={styles.detailPrice}>₹{(i.price * i.quantity).toFixed(0)}</Text>
                 </View>
               ))}
@@ -154,6 +255,26 @@ function OrderCard({ order, onPress, expanded, detail }) {
             </View>
           )}
 
+          {canCancel && (
+            <View style={styles.cancelSection}>
+              <Text style={styles.cancelHelp}>
+                Changed your mind? You can cancel before packing starts.
+              </Text>
+              <TouchableOpacity
+                style={[styles.cancelBtn, canceling && styles.cancelBtnDisabled]}
+                onPress={onCancel}
+                disabled={canceling}
+                activeOpacity={0.85}
+              >
+                {canceling ? (
+                  <ActivityIndicator color={Colors.error} size="small" />
+                ) : (
+                  <Text style={styles.cancelBtnText}>Cancel Order</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+
         </View>
       )}
 
@@ -164,13 +285,23 @@ function OrderCard({ order, onPress, expanded, detail }) {
 
 export default function OrdersScreen({ navigation }) {
   const { user } = useAuth();
+  const tabBarHeight = useBottomTabBarHeight();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [orderDetails, setOrderDetails] = useState({});
+  const [cancelingOrderId, setCancelingOrderId] = useState(null);
 
   useEffect(() => { loadOrders(); }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      setExpandedId(null);
+      setOrderDetails({});
+      loadOrders();
+    }, [user])
+  );
 
   async function loadOrders() {
     if (!user) { setLoading(false); return; }
@@ -183,6 +314,7 @@ export default function OrdersScreen({ navigation }) {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    setOrderDetails({});
     await loadOrders();
     setRefreshing(false);
   }, []);
@@ -190,11 +322,51 @@ export default function OrdersScreen({ navigation }) {
   async function toggleOrder(id) {
     if (expandedId === id) { setExpandedId(null); return; }
     setExpandedId(id);
-    if (!orderDetails[id]) {
-      try {
-        const { data } = await getMyOrder(id);
-        setOrderDetails(prev => ({ ...prev, [id]: data }));
-      } catch {}
+    try {
+      const { data } = await getMyOrder(id);
+      setOrderDetails(prev => ({ ...prev, [id]: data }));
+    } catch {}
+  }
+
+  function confirmCancelOrder(order) {
+    Alert.alert(
+      'Cancel Order?',
+      'Your order will be cancelled immediately if packing has not started.',
+      [
+        { text: 'Keep Order', style: 'cancel' },
+        {
+          text: 'Cancel Order',
+          style: 'destructive',
+          onPress: () => handleCancelOrder(order),
+        },
+      ]
+    );
+  }
+
+  async function handleCancelOrder(order) {
+    if (!order?.id || cancelingOrderId) return;
+    setCancelingOrderId(order.id);
+    try {
+      const { data } = await cancelMyOrder(order.id);
+      const cancelledOrder = { ...order, ...(data?.order || data || {}), status: 'cancelled' };
+      setOrders(prev => prev.map(o => (o.id === order.id ? { ...o, ...cancelledOrder } : o)));
+      setOrderDetails(prev => ({
+        ...prev,
+        [order.id]: {
+          ...(prev[order.id] || {}),
+          ...(data?.order || data || {}),
+          status: 'cancelled',
+        },
+      }));
+      await loadOrders();
+      Alert.alert('Order Cancelled', 'Your order has been cancelled successfully.');
+    } catch (err) {
+      Alert.alert(
+        'Could Not Cancel',
+        getApiErrorMessage(err, 'This order cannot be cancelled right now. Please contact support.')
+      );
+    } finally {
+      setCancelingOrderId(null);
     }
   }
 
@@ -244,9 +416,11 @@ export default function OrdersScreen({ navigation }) {
               expanded={expandedId === item.id}
               detail={orderDetails[item.id]}
               onPress={() => toggleOrder(item.id)}
+              onCancel={() => confirmCancelOrder(item)}
+              canceling={cancelingOrderId === item.id}
             />
           )}
-          contentContainerStyle={{ padding: Spacing.lg, gap: Spacing.md }}
+          contentContainerStyle={{ padding: Spacing.lg, gap: Spacing.md, paddingBottom: tabBarHeight + Spacing.xl }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
           }
@@ -278,6 +452,7 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing.md },
   orderDate: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
   orderTotal: { fontSize: FontSize.lg, fontWeight: '800', color: Colors.primary },
+  orderDiscount: { fontSize: FontSize.xs, color: Colors.success, marginTop: 2, fontWeight: '700' },
   codLabel: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
 
   badge: {
@@ -309,6 +484,31 @@ const styles = StyleSheet.create({
 
   sectionLabel: { fontSize: FontSize.xs, fontWeight: '700', color: Colors.textMuted, marginBottom: Spacing.sm, textTransform: 'uppercase', letterSpacing: 0.5 },
 
+  updatesSection: { marginBottom: Spacing.lg, gap: Spacing.sm },
+  updateCard: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    backgroundColor: Colors.cream,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  updateIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  updateIcon: { fontSize: 15 },
+  updateContent: { flex: 1 },
+  updateHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: Spacing.sm, marginBottom: 4 },
+  updateTitle: { flex: 1, fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
+  updateMessage: { fontSize: FontSize.sm, color: Colors.textMuted, lineHeight: 18 },
+  updateMeta: { fontSize: FontSize.xs, color: Colors.textMuted },
+
   itemsSection: { marginBottom: Spacing.lg },
   detailItem: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.xs },
   detailEmoji: { fontSize: 18 },
@@ -327,4 +527,32 @@ const styles = StyleSheet.create({
   addressRow: { flexDirection: 'row', gap: Spacing.sm, alignItems: 'flex-start' },
   addressIcon: { fontSize: 14 },
   addressText: { flex: 1, fontSize: FontSize.xs, color: Colors.textMuted },
+  cancelSection: {
+    marginTop: Spacing.lg,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  cancelHelp: {
+    fontSize: FontSize.xs,
+    color: Colors.textMuted,
+    marginBottom: Spacing.sm,
+  },
+  cancelBtn: {
+    minHeight: 42,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
+    borderColor: Colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff5f5',
+  },
+  cancelBtnDisabled: {
+    opacity: 0.7,
+  },
+  cancelBtnText: {
+    color: Colors.error,
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+  },
 });

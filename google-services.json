@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "93082728874",
+    "project_id": "meecart-app",
+    "storage_bucket": "meecart-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:93082728874:android:46b604c959cac9d33fd3d3",
+        "android_client_info": {
+          "package_name": "com.meecart"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAjN6T1ADpVxcbd95o6VR8UHhrRnUxdFIk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

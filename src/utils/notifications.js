@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -12,7 +13,10 @@ Notifications.setNotificationHandler({
 });
 
 export async function registerForPushNotifications() {
-  if (!Device.isDevice) return null;
+  if (!Device.isDevice) {
+    console.log('[NOTIF] register: not physical device');
+    return null;
+  }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
@@ -22,17 +26,33 @@ export async function registerForPushNotifications() {
     finalStatus = status;
   }
 
-  if (finalStatus !== 'granted') return null;
+  if (finalStatus !== 'granted') {
+    console.log('[NOTIF] register: permission denied', finalStatus);
+    return null;
+  }
 
-  const token = (await Notifications.getExpoPushTokenAsync()).data;
+  const projectId =
+    Constants?.expoConfig?.extra?.eas?.projectId ||
+    Constants?.easConfig?.projectId;
+
+  if (!projectId) {
+    console.warn('[NOTIF] missing projectId, cannot register push token');
+    return null;
+  }
+
+  const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+  console.log('[NOTIF] push token', token);
   await AsyncStorage.setItem('push_token', token);
 
   if (Platform.OS === 'android') {
-    Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
+    await Notifications.setNotificationChannelAsync('meecart-default', {
+      name: 'Meecart Notifications',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#2d6a4f',
+      sound: 'default',
     });
+    console.log('[NOTIF] android channel set: meecart-default');
   }
 
   return token;
@@ -47,6 +67,7 @@ export async function sendPushNotification(expoPushToken, title, body) {
       sound: 'default',
       title,
       body,
+      channelId: 'meecart-default',
       data: {},
     }),
   });
