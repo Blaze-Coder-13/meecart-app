@@ -48,6 +48,13 @@ export default function CheckoutScreen({ navigation, route }) {
   }, []);
 
   useEffect(() => {
+    if (cartItems.length > 0) return;
+    Alert.alert('Cart Empty', 'Please add items before checkout.', [
+      { text: 'Shop Now', onPress: () => navigation.goBack() },
+    ]);
+  }, [cartItems.length, navigation]);
+
+  useEffect(() => {
     const selectedPromo = route?.params?.selectedPromo;
     if (!selectedPromo?.code) return;
 
@@ -102,7 +109,7 @@ export default function CheckoutScreen({ navigation, route }) {
   const DELIVERY_CHARGE = settings.delivery_charges;
   const discount = (promoApplied ? Number(promoApplied.discount || 0) : 0) + referralDiscount;
   const deliveryCharges = cartTotal >= FREE_DELIVERY_ABOVE ? 0 : DELIVERY_CHARGE;
-  const finalTotal = cartTotal + deliveryCharges - discount;
+  const finalTotal = Math.max(0, cartTotal + deliveryCharges - discount);
   const selectedAddress = addressMode === 'saved' ? savedAddress : newAddress;
 
   function handleOrderSuccess() {
@@ -182,6 +189,13 @@ export default function CheckoutScreen({ navigation, route }) {
 
   async function handlePlaceOrder() {
     if (loading) return;
+
+    if (cartItems.length === 0) {
+      Alert.alert('Cart Empty', 'Please add items before checkout.', [
+        { text: 'Shop Now', onPress: () => navigation.goBack() },
+      ]);
+      return;
+    }
 
     const idempotencyKey = `order_${Date.now()}_${Math.random().toString(36).slice(2,9)}`;
     setOrderIdempotencyKey(idempotencyKey);
@@ -444,9 +458,9 @@ export default function CheckoutScreen({ navigation, route }) {
             <Text style={styles.footAmt}>₹{finalTotal}</Text>
           </View>
           <TouchableOpacity
-            style={[styles.placeBtn, loading && styles.placeBtnDisabled]}
+            style={[styles.placeBtn, (loading || cartItems.length === 0) && styles.placeBtnDisabled]}
             onPress={handlePlaceOrder}
-            disabled={loading}
+            disabled={loading || cartItems.length === 0}
             activeOpacity={0.9}
           >
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.placeBtnText}>Place Order - Pay on Delivery</Text>}

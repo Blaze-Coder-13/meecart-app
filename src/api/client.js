@@ -92,6 +92,16 @@ export const getMyOrders = () =>
 export const getMyOrder = (id) =>
   request('GET', `/api/orders/my/${id}`);
 
+export const cancelMyOrder = async (id, reason = 'Cancelled by customer') => {
+  try {
+    return await request('PATCH', `/api/orders/my/${id}/cancel`, { reason });
+  } catch (err) {
+    const status = err?.response?.status;
+    if (status !== 404 && status !== 405) throw err;
+    return request('POST', `/api/orders/${id}/cancel`, { reason });
+  }
+};
+
 // ── PROMO CODES ───────────────────────────────────────
 export const applyPromoCode = (code, order_total) =>
   request('POST', '/api/admin/promos/apply', { code, order_total });
